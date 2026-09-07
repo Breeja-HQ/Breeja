@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Breeja — Gasless cross-chain stablecoin settlement",
+  title: "Breeja: Gasless cross-chain stablecoin settlement",
   description:
     "Move stablecoins across chains, gaslessly, in seconds. Settlement infrastructure other agents can pay through.",
 };
