@@ -13,19 +13,19 @@ export const sepoliaChain = sepolia;
 
 export const sepoliaPublicClient = createPublicClient({
   chain: sepoliaChain,
-  transport: http(requireEnv("SEPOLIA_RPC_URL")),
+  transport: http(requireEnv("ETHEREUM_SEPOLIA_RPC_URL")),
 });
 
 export const relayerAccount = privateKeyToAccount(requireEnv("PRIVATE_KEY") as `0x${string}`);
 
 export const sepoliaWalletClient = createWalletClient({
   chain: sepoliaChain,
-  transport: http(requireEnv("SEPOLIA_RPC_URL")),
+  transport: http(requireEnv("ETHEREUM_SEPOLIA_RPC_URL")),
   account: relayerAccount,
 });
 
 export const sourceVaultContract = getContract({
-  address: requireEnv("SOURCE_VAULT_ADDRESS") as `0x${string}`,
+  address: requireEnv("ETHEREUM_SEPOLIA_SOURCE_VAULT_ADDRESS") as `0x${string}`,
   abi: sourceVaultAbi,
   client: { public: sepoliaPublicClient, wallet: sepoliaWalletClient },
 });
@@ -38,7 +38,7 @@ const erc20ReadAbi = parseAbi([
 ]);
 
 export const sepoliaUsdcContract = getContract({
-  address: requireEnv("SEPOLIA_USDC_ADDRESS") as `0x${string}`,
+  address: requireEnv("ETHEREUM_SEPOLIA_USDC_ADDRESS") as `0x${string}`,
   abi: erc20ReadAbi,
   client: { public: sepoliaPublicClient, wallet: sepoliaWalletClient },
 });
