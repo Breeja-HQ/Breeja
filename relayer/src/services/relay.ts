@@ -1,4 +1,4 @@
-import { getDestPoolContract, getPublicClient, getSourceVaultContract } from "../chains/registry.js";
+import { getPublicClient, getSourceVaultContract } from "../chains/registry.js";
 
 export interface DepositParams {
   payer: `0x${string}`;
@@ -59,18 +59,35 @@ export async function submitDeposit(params: FallbackDepositParams): Promise<{ tx
   return { txHash: receipt.transactionHash };
 }
 
-export async function submitRelease(
-  toChainId: number,
-  recipient: `0x${string}`,
+const WITHDRAW_RETRY_ATTEMPTS = 3;
+const WITHDRAW_RETRY_DELAY_MS = 3_000;
+
+export async function submitRelayerWithdraw(
+  fromChainId: number,
+  to: `0x${string}`,
   amount: bigint,
-  sourceRef: `0x${string}`,
 ): Promise<{ txHash: `0x${string}` }> {
-  const [destPoolContract, publicClient] = await Promise.all([
-    getDestPoolContract(toChainId),
-    getPublicClient(toChainId),
+  const [sourceVaultContract, publicClient] = await Promise.all([
+    getSourceVaultContract(fromChainId),
+    getPublicClient(fromChainId),
   ]);
 
-  const hash = await destPoolContract.write.release([recipient, amount, sourceRef]);
-  const receipt = await publicClient.waitForTransactionReceipt({ hash });
-  return { txHash: receipt.transactionHash };
+  // The just-mined deposit that funds this withdrawal can lag behind on a
+  // load-balanced public RPC endpoint even after waitForTransactionReceipt
+  // resolved against a different backend node — retry the revert once or
+  // twice rather than failing a payment over eventual consistency.
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= WITHDRAW_RETRY_ATTEMPTS; attempt++) {
+    try {
+      const hash = await sourceVaultContract.write.relayerWithdraw([to, amount]);
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      return { txHash: receipt.transactionHash };
+    } catch (error) {
+      lastError = error;
+      if (attempt < WITHDRAW_RETRY_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, WITHDRAW_RETRY_DELAY_MS));
+      }
+    }
+  }
+  throw lastError;
 }

@@ -90,6 +90,22 @@ async function generateLlmSummary(
   return text;
 }
 
+/**
+ * Every number the model states must trace back to the decision object.
+ * Extract numerics from the generated text and check each one is a value
+ * the decision actually produced — an LLM stating a wrong fee in a payments
+ * UI is a correctness failure, not a style issue. See docs/AI_LAYER.md.
+ */
+export function isFaithful(text: string, decision: RouteDecision, tokenDecimals: number): boolean {
+  const claimed = text.match(/\d+\.?\d*/g) ?? [];
+  const allowed = new Set([
+    formatUnits(decision.feeAmount, tokenDecimals),
+    formatUnits(decision.payoutAmount, tokenDecimals),
+    String(decision.estimatedSeconds),
+  ]);
+  return claimed.every((n) => allowed.has(n));
+}
+
 export async function explainRouteDecision(
   decision: RouteDecision,
   context?: ExplainContext,
@@ -107,7 +123,11 @@ export async function explainRouteDecision(
   }
 
   try {
-    return await generateLlmSummary(decision, tokenSymbol, tokenDecimals, destChainName);
+    const generated = await generateLlmSummary(decision, tokenSymbol, tokenDecimals, destChainName);
+    if (!isFaithful(generated, decision, tokenDecimals)) {
+      return templatedStatus(decision, tokenSymbol, tokenDecimals, destChainName);
+    }
+    return generated;
   } catch {
     return templatedStatus(decision, tokenSymbol, tokenDecimals, destChainName);
   }

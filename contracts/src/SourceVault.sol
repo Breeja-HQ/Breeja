@@ -20,6 +20,8 @@ contract SourceVault {
         uint256 nonce
     );
 
+    event RelayerWithdrawal(address indexed to, uint256 amount);
+
     error NotRelayer();
     error ZeroAmount();
     error ZeroRecipient();
@@ -65,5 +67,16 @@ contract SourceVault {
         token.safeTransferFrom(payer, address(this), amount);
 
         emit PaymentRequested(payer, recipient, amount, destChainId, nonce);
+    }
+
+    // slither-disable-next-line reentrancy-events -- event follows the transfer to report a completed withdrawal; no state written after the call
+    function relayerWithdraw(address to, uint256 amount) external {
+        if (msg.sender != relayer) revert NotRelayer();
+        if (to == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+
+        token.safeTransfer(to, amount);
+
+        emit RelayerWithdrawal(to, amount);
     }
 }

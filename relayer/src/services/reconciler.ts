@@ -5,7 +5,7 @@ import {
   markReleased,
 } from "../db/paymentsRepository.js";
 import { findPaymentRequested, findReleasedBySourceRef } from "./events.js";
-import { submitRelease } from "./relay.js";
+import { submitFastPoolRelease } from "../routes/fastPool.js";
 import { explainRouteDecision } from "../agent/explain.js";
 import { getChainName } from "../chains/chainIds.js";
 import type { RouteDecision } from "../agent/router.js";
@@ -17,6 +17,7 @@ import {
 
 const RECONCILER_INTERVAL_MS = 30_000;
 const STALE_THRESHOLD_MS = 120_000;
+const CCTP_STALE_THRESHOLD_MS = 25 * 60_000;
 const PERMIT_ABANDONED_THRESHOLD_MS = 30 * 60_000;
 
 const releaseAttemptsByPaymentId = new Map<string, number>();
@@ -24,6 +25,7 @@ const releaseAttemptsByPaymentId = new Map<string, number>();
 function paymentDecisionForExplanation(payment: PaymentStatus): RouteDecision {
   return {
     viable: true,
+    route: payment.route,
     feeBps: 0,
     feeAmount: BigInt(payment.feeAmount),
     payoutAmount: BigInt(payment.payoutAmount),
@@ -61,6 +63,16 @@ async function reconcilePendingDeposit(payment: Extract<PaymentStatus, { state: 
 async function reconcileDepositConfirmed(
   payment: Extract<PaymentStatus, { state: "deposit_confirmed" }>,
 ): Promise<void> {
+  if (payment.route === "cctp") {
+    // The reconciler only retries fast-pool releases: retrying a CCTP burn
+    // would risk a second burn against the same deposit. A CCTP payment stuck
+    // here means runDepositAndRelease's own try/catch already failed it, or
+    // the process died mid-flight — surface it rather than silently retry.
+    await markFailed(payment.id, "CctpReleaseRequiresManualReview");
+    console.error(`[reconciler] ALERT: CCTP payment ${payment.id} stuck in deposit_confirmed, marked failed`);
+    return;
+  }
+
   const found = await findReleasedBySourceRef(payment.toChainId, payment.sourceTxHash);
   const attempts = releaseAttemptsByPaymentId.get(payment.id) ?? 0;
 
@@ -81,7 +93,7 @@ async function reconcileDepositConfirmed(
   if (action.type === "retry_release") {
     releaseAttemptsByPaymentId.set(payment.id, attempts + 1);
     try {
-      const { txHash } = await submitRelease(
+      const { txHash } = await submitFastPoolRelease(
         payment.toChainId,
         payment.recipient,
         BigInt(payment.payoutAmount),
@@ -108,7 +120,7 @@ async function reconcileDepositConfirmed(
 }
 
 export async function runReconcilerOnce(): Promise<void> {
-  const stalePayments = await listStalePendingPayments(STALE_THRESHOLD_MS);
+  const stalePayments = await listStalePendingPayments(STALE_THRESHOLD_MS, { cctp: CCTP_STALE_THRESHOLD_MS });
 
   for (const payment of stalePayments) {
     try {

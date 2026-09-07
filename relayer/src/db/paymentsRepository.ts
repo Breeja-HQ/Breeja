@@ -1,5 +1,6 @@
 import type { Route, PaymentStatus } from "../types/payment.js";
 import { getPool } from "./pool.js";
+import { publishPaymentUpdate } from "../services/paymentEvents.js";
 
 interface PaymentRow {
   id: string;
@@ -158,7 +159,9 @@ export async function markDepositConfirmed(
     );
   }
 
-  return mapRow(result.rows[0]);
+  const payment = mapRow(result.rows[0]);
+  publishPaymentUpdate(payment);
+  return payment;
 }
 
 export async function markReleased(
@@ -181,7 +184,9 @@ export async function markReleased(
     );
   }
 
-  return mapRow(result.rows[0]);
+  const payment = mapRow(result.rows[0]);
+  publishPaymentUpdate(payment);
+  return payment;
 }
 
 export async function markFailed(id: string, error: string): Promise<PaymentStatus> {
@@ -198,17 +203,43 @@ export async function markFailed(id: string, error: string): Promise<PaymentStat
     throw new Error(`markFailed: payment ${id} was already terminal (transition refused)`);
   }
 
-  return mapRow(result.rows[0]);
+  const payment = mapRow(result.rows[0]);
+  publishPaymentUpdate(payment);
+  return payment;
 }
 
-export async function listStalePendingPayments(olderThanMs: number): Promise<PaymentStatus[]> {
+export async function listStalePendingPayments(
+  olderThanMs: number,
+  routeOlderThanMs?: Partial<Record<Route, number>>,
+): Promise<PaymentStatus[]> {
   const pool = getPool();
+
+  // CCTP's standard-transfer attestation can take on the order of 15-20
+  // minutes, far longer than fast-pool's ~10s release — a payment legitimately
+  // mid-attestation is not the same as one actually stuck.
+  const cctpThresholdMs = routeOlderThanMs?.cctp ?? olderThanMs;
+
   const result = await pool.query<PaymentRow>(
     `select * from payments
      where state not in ('released', 'failed')
-       and updated_at < now() - make_interval(secs => $1::double precision)`,
-    [olderThanMs / 1000],
+       and (
+         (route <> 'cctp' and updated_at < now() - make_interval(secs => $1::double precision))
+         or
+         (route = 'cctp' and updated_at < now() - make_interval(secs => $2::double precision))
+       )`,
+    [olderThanMs / 1000, cctpThresholdMs / 1000],
   );
 
+  return result.rows.map(mapRow);
+}
+
+export async function listInFlightPaymentsByRecipient(recipient: `0x${string}`): Promise<PaymentStatus[]> {
+  const pool = getPool();
+  const result = await pool.query<PaymentRow>(
+    `select * from payments
+     where recipient = $1 and state not in ('released', 'failed')
+     order by created_at asc`,
+    [toBytea(recipient)],
+  );
   return result.rows.map(mapRow);
 }

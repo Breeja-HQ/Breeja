@@ -1,6 +1,9 @@
-import type { Chain, GetContractReturnType, PublicClient, WalletClient } from "viem";
+import { getContract, parseAbi, type Chain, type GetContractReturnType, type PublicClient, type WalletClient } from "viem";
 import sourceVaultAbi from "../abi/SourceVault.json" with { type: "json" };
 import destPoolAbi from "../abi/DestPool.json" with { type: "json" };
+import tokenMessengerV2Abi from "../abi/TokenMessengerV2.json" with { type: "json" };
+import messageTransmitterV2Abi from "../abi/MessageTransmitterV2.json" with { type: "json" };
+import { requireEnv } from "../env.js";
 import {
   ARBITRUM_SEPOLIA_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
@@ -25,7 +28,22 @@ type SourceVaultContract = GetContractReturnType<
   { public: PublicClient; wallet: WalletClient }
 >;
 type DestPoolContract = GetContractReturnType<typeof destPoolAbi, { public: PublicClient; wallet: WalletClient }>;
-type Erc20Contract = GetContractReturnType<any, { public: PublicClient; wallet: WalletClient }>;
+
+const erc20Abi = parseAbi([
+  "function balanceOf(address) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function transfer(address, uint256) returns (bool)",
+  "function approve(address, uint256) returns (bool)",
+]);
+type Erc20Contract = GetContractReturnType<typeof erc20Abi, { public: PublicClient; wallet: WalletClient }>;
+type TokenMessengerContract = GetContractReturnType<
+  typeof tokenMessengerV2Abi,
+  { public: PublicClient; wallet: WalletClient }
+>;
+type MessageTransmitterContract = GetContractReturnType<
+  typeof messageTransmitterV2Abi,
+  { public: PublicClient; wallet: WalletClient }
+>;
 
 interface ChainEntry {
   chainId: number;
@@ -35,7 +53,28 @@ interface ChainEntry {
   sourceVaultContract: SourceVaultContract;
   destPoolContract: DestPoolContract | null;
   usdcContract: Erc20Contract;
+  tokenMessengerContract: TokenMessengerContract;
+  messageTransmitterContract: MessageTransmitterContract;
   getGasPrice: () => Promise<bigint>;
+}
+
+function buildCctpContracts(
+  publicClient: PublicClient<any, any>,
+  walletClient: WalletClient<any, any, any>,
+): { tokenMessengerContract: TokenMessengerContract; messageTransmitterContract: MessageTransmitterContract } {
+  const tokenMessengerContract = getContract({
+    address: requireEnv("CCTP_TOKEN_MESSENGER_ADDRESS") as `0x${string}`,
+    abi: tokenMessengerV2Abi,
+    client: { public: publicClient, wallet: walletClient },
+  }) as unknown as TokenMessengerContract;
+
+  const messageTransmitterContract = getContract({
+    address: requireEnv("CCTP_MESSAGE_TRANSMITTER_ADDRESS") as `0x${string}`,
+    abi: messageTransmitterV2Abi,
+    client: { public: publicClient, wallet: walletClient },
+  }) as unknown as MessageTransmitterContract;
+
+  return { tokenMessengerContract, messageTransmitterContract };
 }
 
 let cachedEntries: Map<number, ChainEntry> | null = null;
@@ -67,6 +106,7 @@ async function loadEntries(): Promise<Map<number, ChainEntry>> {
     sourceVaultContract: sepolia.sourceVaultContract as unknown as SourceVaultContract,
     destPoolContract: null,
     usdcContract: sepolia.sepoliaUsdcContract as unknown as Erc20Contract,
+    ...buildCctpContracts(sepolia.sepoliaPublicClient, sepolia.sepoliaWalletClient),
     getGasPrice: sepolia.getSepoliaGasPrice,
   });
 
@@ -78,6 +118,7 @@ async function loadEntries(): Promise<Map<number, ChainEntry>> {
     sourceVaultContract: baseSepolia.sourceVaultContract as unknown as SourceVaultContract,
     destPoolContract: baseSepolia.destPoolContract as unknown as DestPoolContract,
     usdcContract: baseSepolia.baseSepoliaUsdcContract as unknown as Erc20Contract,
+    ...buildCctpContracts(baseSepolia.baseSepoliaPublicClient, baseSepolia.baseSepoliaWalletClient),
     getGasPrice: baseSepolia.getBaseSepoliaGasPrice,
   });
 
@@ -89,6 +130,7 @@ async function loadEntries(): Promise<Map<number, ChainEntry>> {
     sourceVaultContract: arbitrumSepolia.sourceVaultContract as unknown as SourceVaultContract,
     destPoolContract: arbitrumSepolia.destPoolContract as unknown as DestPoolContract,
     usdcContract: arbitrumSepolia.arbitrumSepoliaUsdcContract as unknown as Erc20Contract,
+    ...buildCctpContracts(arbitrumSepolia.arbitrumSepoliaPublicClient, arbitrumSepolia.arbitrumSepoliaWalletClient),
     getGasPrice: arbitrumSepolia.getArbitrumSepoliaGasPrice,
   });
 
@@ -100,6 +142,7 @@ async function loadEntries(): Promise<Map<number, ChainEntry>> {
     sourceVaultContract: optimismSepolia.sourceVaultContract as unknown as SourceVaultContract,
     destPoolContract: optimismSepolia.destPoolContract as unknown as DestPoolContract,
     usdcContract: optimismSepolia.optimismSepoliaUsdcContract as unknown as Erc20Contract,
+    ...buildCctpContracts(optimismSepolia.optimismSepoliaPublicClient, optimismSepolia.optimismSepoliaWalletClient),
     getGasPrice: optimismSepolia.getOptimismSepoliaGasPrice,
   });
 
@@ -122,6 +165,29 @@ async function requireDestPoolContract(chainId: number): Promise<DestPoolContrac
 
 export async function getSourceVaultContract(chainId: number): Promise<SourceVaultContract> {
   return (await requireChainEntry(chainId)).sourceVaultContract;
+}
+
+export async function getSourceVaultAddress(chainId: number): Promise<`0x${string}`> {
+  return (await requireChainEntry(chainId)).sourceVaultContract.address;
+}
+
+export async function getRelayerAddress(chainId: number): Promise<`0x${string}`> {
+  const entry = await requireChainEntry(chainId);
+  const address = entry.walletClient.account?.address;
+  if (!address) throw new Error(`Chain ${chainId} wallet client has no account`);
+  return address;
+}
+
+export async function getTokenMessengerContract(chainId: number): Promise<TokenMessengerContract> {
+  return (await requireChainEntry(chainId)).tokenMessengerContract;
+}
+
+export async function getMessageTransmitterContract(chainId: number): Promise<MessageTransmitterContract> {
+  return (await requireChainEntry(chainId)).messageTransmitterContract;
+}
+
+export async function getMessageTransmitterAddress(chainId: number): Promise<`0x${string}`> {
+  return (await requireChainEntry(chainId)).messageTransmitterContract.address;
 }
 
 export async function getDestPoolContract(chainId: number): Promise<DestPoolContract> {

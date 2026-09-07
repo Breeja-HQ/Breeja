@@ -8,12 +8,14 @@ Ethereum Sepolia is source-only, per [ARCHITECTURE.md](ARCHITECTURE.md) — no `
 
 | Chain | Chain ID | SourceVault | DestPool | USDC (Circle) |
 |---|---|---|---|---|
-| Ethereum Sepolia | 11155111 | `0x6F70269Ed4a213F7db423b4A6D3B4C7079961343` | — | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` |
-| Base Sepolia | 84532 | `0xCAa8b30F4c71B8bB8C7149b2F5f709ed2DB461ab` | `0x45944B08fea203a7469C82A690F68fabF85B8283` | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
-| Arbitrum Sepolia | 421614 | `0xBE369c4BB4E06ed375926bc3AC284ed01d546d8B` | `0xaA45094129D06ab48AEf1e8251071067FC4FED5A` | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` |
-| Optimism Sepolia | 11155420 | `0xfd2f67cD354545712f9d8230170015d7e30d133A` | `0xA5dd225Beb2Ec0009Fe143eb0B9309Ba07d23737` | `0x5fd84259d66Cd46123540766Be93DFE6D43130D7` |
+| Ethereum Sepolia | 11155111 | `0xcD0dC65c8d64A5D135180bFCA530398f4F2b2424` | — | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` |
+| Base Sepolia | 84532 | `0x552431953dd3F087557196A383c436ddAab665ab` | `0x45944B08fea203a7469C82A690F68fabF85B8283` | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
+| Arbitrum Sepolia | 421614 | `0x5471bab4fC78A946cDC3142d852e54cBD83C181e` | `0xaA45094129D06ab48AEf1e8251071067FC4FED5A` | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` |
+| Optimism Sepolia | 11155420 | `0x2d18B34880cc67DA1358f8963906492e0d01a567` | `0xA5dd225Beb2Ec0009Fe143eb0B9309Ba07d23737` | `0x5fd84259d66Cd46123540766Be93DFE6D43130D7` |
 
 Deployer / relayer / owner (this build): `0x9bcf302cFCB64406b557342c2715e85Ac62A4693`. Fee: 50 bps.
+
+`SourceVault` was redeployed on all four chains after `relayerWithdraw(address to, uint256 amount)` was added — a relayer-gated function to move payer-deposited funds out of the vault, needed so the relayer can burn them via CCTP (funds land in the vault on deposit, not the relayer's own wallet). The addresses above are current; DestPool addresses are unchanged from the original deploy.
 
 USDC addresses confirmed against block explorers (Basescan / Arbiscan Sepolia / OP Sepolia Etherscan) and cross-checked against Circle's documented testnet addresses. EIP-3009 support verified on-chain for all three via `DOMAIN_SEPARATOR()` and `authorizationState()` — see [CHAINS.md](CHAINS.md).
 

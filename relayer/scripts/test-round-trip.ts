@@ -99,6 +99,7 @@ async function pollStatus(id: string, apiKey: string, timeoutMs: number): Promis
 async function main() {
   const fromKey = requireEnv("ROUND_TRIP_FROM_CHAIN");
   const toKey = requireEnv("ROUND_TRIP_TO_CHAIN");
+  const preference = process.env.ROUND_TRIP_PREFERENCE as "fast" | "cheap" | "trustless" | undefined;
 
   const fromChain = CHAINS[fromKey];
   const toChain = CHAINS[toKey];
@@ -194,6 +195,7 @@ async function main() {
         r,
         s,
       },
+      ...(preference ? { preference } : {}),
     }),
   });
 
@@ -207,7 +209,8 @@ async function main() {
   log(`Fee: ${formatUnits(BigInt(decision.feeAmount), 6)} USDC, payout: ${formatUnits(BigInt(decision.payoutAmount), 6)} USDC`);
   console.log("");
 
-  const finalStatus = await pollStatus(id, apiKey, 180_000);
+  const pollTimeoutMs = preference === "trustless" ? 25 * 60_000 : 180_000;
+  const finalStatus = await pollStatus(id, apiKey, pollTimeoutMs);
 
   if (finalStatus.state === "failed") {
     throw new Error(`Round trip failed: ${finalStatus.error}`);

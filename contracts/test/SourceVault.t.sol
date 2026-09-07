@@ -161,4 +161,40 @@ contract SourceVaultTest is Test {
         vm.expectRevert(SourceVault.ZeroAddress.selector);
         new SourceVault(address(token), address(0));
     }
+
+    function test_RelayerWithdraw_MovesDepositedFunds() public {
+        vm.prank(payer);
+        token.approve(address(vault), AMOUNT);
+        vm.prank(relayer);
+        vault.deposit(payer, recipient, AMOUNT, DEST_CHAIN_ID);
+
+        address burnRouter = address(0xB0111);
+
+        vm.expectEmit(true, false, false, true, address(vault));
+        emit SourceVault.RelayerWithdrawal(burnRouter, AMOUNT);
+
+        vm.prank(relayer);
+        vault.relayerWithdraw(burnRouter, AMOUNT);
+
+        assertEq(token.balanceOf(address(vault)), 0);
+        assertEq(token.balanceOf(burnRouter), AMOUNT);
+    }
+
+    function test_RevertWhen_RelayerWithdraw_CalledByNonRelayer() public {
+        vm.expectRevert(SourceVault.NotRelayer.selector);
+        vm.prank(address(0xDEAD));
+        vault.relayerWithdraw(recipient, AMOUNT);
+    }
+
+    function test_RevertWhen_RelayerWithdraw_ZeroAddress() public {
+        vm.expectRevert(SourceVault.ZeroAddress.selector);
+        vm.prank(relayer);
+        vault.relayerWithdraw(address(0), AMOUNT);
+    }
+
+    function test_RevertWhen_RelayerWithdraw_ZeroAmount() public {
+        vm.expectRevert(SourceVault.ZeroAmount.selector);
+        vm.prank(relayer);
+        vault.relayerWithdraw(recipient, 0);
+    }
 }

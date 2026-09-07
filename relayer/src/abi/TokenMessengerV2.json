@@ -1,0 +1,58 @@
+[
+  {
+    "type": "function",
+    "name": "depositForBurn",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "destinationDomain",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "mintRecipient",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "burnToken",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "destinationCaller",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "maxFee",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "minFinalityThreshold",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "localMessageTransmitter",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  }
+]

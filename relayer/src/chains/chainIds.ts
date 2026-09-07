@@ -5,16 +5,22 @@ export const OPTIMISM_SEPOLIA_CHAIN_ID = 11155420;
 
 interface ChainRole {
   chainId: number;
+  slug: string;
   name: string;
   isDestination: boolean;
+  // CCTP V2 domain ID, verified on-chain via MessageTransmitterV2.localDomain() —
+  // see docs/DEPLOYMENTS.md. Every chain in this mesh is CCTP-enabled.
+  cctpDomain: number;
 }
 
 const CHAIN_ROLES: readonly ChainRole[] = [
-  { chainId: ETHEREUM_SEPOLIA_CHAIN_ID, name: "Ethereum Sepolia", isDestination: false },
-  { chainId: BASE_SEPOLIA_CHAIN_ID, name: "Base Sepolia", isDestination: true },
-  { chainId: ARBITRUM_SEPOLIA_CHAIN_ID, name: "Arbitrum Sepolia", isDestination: true },
-  { chainId: OPTIMISM_SEPOLIA_CHAIN_ID, name: "Optimism Sepolia", isDestination: true },
+  { chainId: ETHEREUM_SEPOLIA_CHAIN_ID, slug: "ethereum-sepolia", name: "Ethereum Sepolia", isDestination: false, cctpDomain: 0 },
+  { chainId: BASE_SEPOLIA_CHAIN_ID, slug: "base-sepolia", name: "Base Sepolia", isDestination: true, cctpDomain: 6 },
+  { chainId: ARBITRUM_SEPOLIA_CHAIN_ID, slug: "arbitrum-sepolia", name: "Arbitrum Sepolia", isDestination: true, cctpDomain: 3 },
+  { chainId: OPTIMISM_SEPOLIA_CHAIN_ID, slug: "optimism-sepolia", name: "Optimism Sepolia", isDestination: true, cctpDomain: 2 },
 ];
+
+const CHAIN_ROLE_BY_SLUG = new Map<string, ChainRole>(CHAIN_ROLES.map((role) => [role.slug, role]));
 
 const CHAIN_ROLE_BY_ID = new Map<number, ChainRole>(CHAIN_ROLES.map((role) => [role.chainId, role]));
 
@@ -37,6 +43,43 @@ export function listDestinationChainIds(): number[] {
 
 export function getChainName(chainId: number): string {
   return CHAIN_ROLE_BY_ID.get(chainId)?.name ?? `chain ${chainId}`;
+}
+
+export function getChainSlug(chainId: number): string | null {
+  return CHAIN_ROLE_BY_ID.get(chainId)?.slug ?? null;
+}
+
+export function resolveChainId(ref: string | number): number | null {
+  if (typeof ref === "number") return CHAIN_ROLE_BY_ID.has(ref) ? ref : null;
+  return CHAIN_ROLE_BY_SLUG.get(ref)?.chainId ?? null;
+}
+
+export interface ChainInfo {
+  chainId: number;
+  slug: string;
+  name: string;
+  isSource: boolean;
+  isDestination: boolean;
+}
+
+export function listChainInfo(): ChainInfo[] {
+  return CHAIN_ROLES.map((role) => ({
+    chainId: role.chainId,
+    slug: role.slug,
+    name: role.name,
+    isSource: true,
+    isDestination: role.isDestination,
+  }));
+}
+
+export function isCctpEnabled(chainId: number): boolean {
+  return CHAIN_ROLE_BY_ID.has(chainId);
+}
+
+export function getCctpDomain(chainId: number): number {
+  const role = CHAIN_ROLE_BY_ID.get(chainId);
+  if (!role) throw new Error(`Unsupported chain: ${chainId}`);
+  return role.cctpDomain;
 }
 
 export function listRoutePairs(): Array<{ fromChainId: number; toChainId: number }> {
