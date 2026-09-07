@@ -28,6 +28,16 @@ cast call $TOKEN "authorizationState(address,bytes32)(bool)" $ZERO $ZERO --rpc-u
 
 If either reverts, the token does not implement EIP-3009 and that chain is CCTP-only or excluded. Record the result in this table rather than rediscovering it.
 
+Verified for the Base/Arbitrum/Optimism Sepolia mesh build — both calls returned cleanly (no revert) against each token, confirming full EIP-3009 support:
+
+| Chain | Token | `DOMAIN_SEPARATOR()` | `authorizationState(0,0)` | EIP-712 `name()` | `version()` |
+|---|---|---|---|---|---|
+| Base Sepolia | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | `0x71f17a3b2ff373b803d70a5a07c046c1a2bc8e89c09ef722fcb047abe94c981` | `false` | `USDC` | `2` |
+| Arbitrum Sepolia | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` | `0x85944e1292d007732838d6eadfa67589b78ffcededbd4df60488d0af251308b` | `false` | `USD Coin` | `2` |
+| Optimism Sepolia | `0x5fd84259d66Cd46123540766Be93DFE6D43130D7` | `0x09d038a3e46040fc37eb01174dbbcdb7981fbd8eafd9e1a857b1c67805dfb29` | `false` | `USDC` | `2` |
+
+Gotcha caught here: Arbitrum Sepolia's USDC has EIP-712 domain `name = "USD Coin"`, not `"USDC"` like the other two. A signer that hardcodes `"USDC"` as the domain name produces a signature that fails to verify on Arbitrum. Read `name()` on-chain per token rather than assuming it matches the symbol.
+
 ## Hedera
 
 Hedera is the highest-effort chain here and the decision to include it should stay deliberate.

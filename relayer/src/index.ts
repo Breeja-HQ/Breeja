@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { createApiRouter } from "./api/routes.js";
-import { watchPaymentRequested, watchBaseSepoliaPaymentRequested, watchReleased } from "./services/events.js";
+import { watchAllPaymentRequested, watchAllReleased } from "./services/events.js";
 import { startReconciler } from "./services/reconciler.js";
 
 const app = express();
@@ -37,21 +37,15 @@ app.listen(port, () => {
 
   startReconciler();
 
-  watchPaymentRequested((event) => {
+  void watchAllPaymentRequested((fromChainId, event) => {
     console.log(
-      `[event] PaymentRequested (Sepolia) payer=${event.payer} recipient=${event.recipient} amount=${event.amount} destChainId=${event.destChainId} tx=${event.transactionHash}`,
+      `[event] PaymentRequested (chain ${fromChainId}) payer=${event.payer} recipient=${event.recipient} amount=${event.amount} destChainId=${event.destChainId} tx=${event.transactionHash}`,
     );
   });
 
-  watchBaseSepoliaPaymentRequested((event) => {
+  void watchAllReleased((toChainId, event) => {
     console.log(
-      `[event] PaymentRequested (Base Sepolia) payer=${event.payer} recipient=${event.recipient} amount=${event.amount} destChainId=${event.destChainId} tx=${event.transactionHash}`,
-    );
-  });
-
-  watchReleased((event) => {
-    console.log(
-      `[event] Released recipient=${event.recipient} amount=${event.amount} fee=${event.fee} sourceRef=${event.sourceRef} tx=${event.transactionHash}`,
+      `[event] Released (chain ${toChainId}) recipient=${event.recipient} amount=${event.amount} fee=${event.fee} sourceRef=${event.sourceRef} tx=${event.transactionHash}`,
     );
   });
 });

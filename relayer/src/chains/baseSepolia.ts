@@ -2,6 +2,7 @@ import { createPublicClient, createWalletClient, http, getContract, parseAbi } f
 import { baseSepolia } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 import sourceVaultAbi from "../abi/SourceVault.json" with { type: "json" };
+import destPoolAbi from "../abi/DestPool.json" with { type: "json" };
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -40,6 +41,12 @@ const erc20ReadAbi = parseAbi([
 export const baseSepoliaUsdcContract = getContract({
   address: requireEnv("BASE_SEPOLIA_USDC_ADDRESS") as `0x${string}`,
   abi: erc20ReadAbi,
+  client: { public: baseSepoliaPublicClient, wallet: baseSepoliaWalletClient },
+});
+
+export const destPoolContract = getContract({
+  address: requireEnv("BASE_SEPOLIA_DEST_POOL_ADDRESS") as `0x${string}`,
+  abi: destPoolAbi,
   client: { public: baseSepoliaPublicClient, wallet: baseSepoliaWalletClient },
 });
 

@@ -1,17 +1,14 @@
-import { hskTokenContract } from "../chains/hsk.js";
+import { getDestPoolAddress, getUsdcContract } from "../chains/registry.js";
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing env var: ${name}`);
-  return value;
+export async function getDestPoolLiquidity(chainId: number): Promise<bigint> {
+  const [destPoolAddress, usdcContract] = await Promise.all([
+    getDestPoolAddress(chainId),
+    getUsdcContract(chainId),
+  ]);
+  return usdcContract.read.balanceOf([destPoolAddress]) as Promise<bigint>;
 }
 
-export async function getDestPoolLiquidity(): Promise<bigint> {
-  const destPoolAddress = requireEnv("DEST_POOL_ADDRESS") as `0x${string}`;
-  return hskTokenContract.read.balanceOf([destPoolAddress]) as Promise<bigint>;
-}
-
-export async function hasSufficientLiquidity(payoutAmount: bigint): Promise<boolean> {
-  const liquidity = await getDestPoolLiquidity();
+export async function hasSufficientLiquidity(chainId: number, payoutAmount: bigint): Promise<boolean> {
+  const liquidity = await getDestPoolLiquidity(chainId);
   return liquidity >= payoutAmount;
 }

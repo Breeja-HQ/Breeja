@@ -1,9 +1,7 @@
+import { isSupportedDestinationChain, isSupportedSourceChain } from "../chains/chainIds.js";
+
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ESTIMATED_RELEASE_SECONDS = 10;
-
-const SEPOLIA_CHAIN_ID = 11155111;
-const BASE_SEPOLIA_CHAIN_ID = 84532;
-const HSK_CHAIN_ID = 133;
 
 export interface PaymentRequest {
   payer: `0x${string}`;
@@ -20,7 +18,7 @@ export interface RouteDecision {
   feeAmount: bigint;
   payoutAmount: bigint;
   sourceChainGasPriceWei: bigint;
-  hskGasPriceWei: bigint;
+  destChainGasPriceWei: bigint;
   destPoolBalance: bigint;
   destPoolPaused: boolean;
   estimatedSeconds: number;
@@ -31,7 +29,7 @@ export interface ChainState {
   feeBpsRaw: bigint;
   destPoolBalance: bigint;
   sourceChainGasPriceWei: bigint;
-  hskGasPriceWei: bigint;
+  destChainGasPriceWei: bigint;
 }
 
 function emptyDecision(overrides: Partial<RouteDecision> & { reason: string }): RouteDecision {
@@ -41,7 +39,7 @@ function emptyDecision(overrides: Partial<RouteDecision> & { reason: string }): 
     feeAmount: 0n,
     payoutAmount: 0n,
     sourceChainGasPriceWei: 0n,
-    hskGasPriceWei: 0n,
+    destChainGasPriceWei: 0n,
     destPoolBalance: 0n,
     destPoolPaused: false,
     estimatedSeconds: 0,
@@ -56,11 +54,15 @@ export function computeFee(amount: bigint, feeBps: bigint): { feeAmount: bigint;
 }
 
 export function checkRequestRejection(request: PaymentRequest): RouteDecision | null {
-  if (request.fromChainId !== SEPOLIA_CHAIN_ID && request.fromChainId !== BASE_SEPOLIA_CHAIN_ID) {
+  if (!isSupportedSourceChain(request.fromChainId)) {
     return emptyDecision({ reason: "UnsupportedSourceChain" });
   }
 
-  if (request.toChainId !== HSK_CHAIN_ID) {
+  if (!isSupportedDestinationChain(request.toChainId)) {
+    return emptyDecision({ reason: "UnsupportedDestChain" });
+  }
+
+  if (request.fromChainId === request.toChainId) {
     return emptyDecision({ reason: "UnsupportedDestChain" });
   }
 
@@ -79,7 +81,7 @@ export function evaluateRouteViability(request: PaymentRequest, chainState: Chai
   const rejection = checkRequestRejection(request);
   if (rejection) return rejection;
 
-  const { destPoolPaused, feeBpsRaw, destPoolBalance, sourceChainGasPriceWei, hskGasPriceWei } = chainState;
+  const { destPoolPaused, feeBpsRaw, destPoolBalance, sourceChainGasPriceWei, destChainGasPriceWei } = chainState;
 
   if (destPoolPaused) {
     return emptyDecision({ reason: "PoolPaused", destPoolPaused: true });
@@ -96,7 +98,7 @@ export function evaluateRouteViability(request: PaymentRequest, chainState: Chai
       feeAmount,
       payoutAmount,
       sourceChainGasPriceWei,
-      hskGasPriceWei,
+      destChainGasPriceWei,
       destPoolBalance,
       destPoolPaused,
       estimatedSeconds: 0,
@@ -109,7 +111,7 @@ export function evaluateRouteViability(request: PaymentRequest, chainState: Chai
     feeAmount,
     payoutAmount,
     sourceChainGasPriceWei,
-    hskGasPriceWei,
+    destChainGasPriceWei,
     destPoolBalance,
     destPoolPaused,
     estimatedSeconds: ESTIMATED_RELEASE_SECONDS,

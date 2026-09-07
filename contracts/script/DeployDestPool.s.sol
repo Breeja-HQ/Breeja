@@ -7,10 +7,10 @@ import {DestPool} from "../src/DestPool.sol";
 contract DeployDestPool is Script {
     function run() external returns (DestPool) {
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
-        address token = vm.envAddress("HSK_TOKEN_ADDRESS");
-        address relayer = vm.envAddress("HSK_RELAYER_ADDRESS");
-        address owner = vm.envAddress("HSK_OWNER_ADDRESS");
-        uint256 feeBps = vm.envUint("HSK_FEE_BPS");
+        address token = vm.envAddress("USDC_ADDRESS");
+        address relayer = vm.envAddress("RELAYER_ADDRESS");
+        address owner = vm.envAddress("OWNER_ADDRESS");
+        uint256 feeBps = vm.envUint("FEE_BPS");
 
         vm.startBroadcast(privateKey);
         DestPool pool = new DestPool(token, relayer, owner, feeBps);

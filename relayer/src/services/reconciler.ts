@@ -7,6 +7,7 @@ import {
 import { findPaymentRequested, findReleasedBySourceRef } from "./events.js";
 import { submitRelease } from "./relay.js";
 import { explainRouteDecision } from "../agent/explain.js";
+import { getChainName } from "../chains/chainIds.js";
 import type { RouteDecision } from "../agent/router.js";
 import type { PaymentStatus } from "../types/payment.js";
 import {
@@ -27,7 +28,7 @@ function paymentDecisionForExplanation(payment: PaymentStatus): RouteDecision {
     feeAmount: BigInt(payment.feeAmount),
     payoutAmount: BigInt(payment.payoutAmount),
     sourceChainGasPriceWei: 0n,
-    hskGasPriceWei: 0n,
+    destChainGasPriceWei: 0n,
     destPoolBalance: 0n,
     destPoolPaused: false,
     estimatedSeconds: 0,
@@ -60,7 +61,7 @@ async function reconcilePendingDeposit(payment: Extract<PaymentStatus, { state: 
 async function reconcileDepositConfirmed(
   payment: Extract<PaymentStatus, { state: "deposit_confirmed" }>,
 ): Promise<void> {
-  const found = await findReleasedBySourceRef(payment.sourceTxHash);
+  const found = await findReleasedBySourceRef(payment.toChainId, payment.sourceTxHash);
   const attempts = releaseAttemptsByPaymentId.get(payment.id) ?? 0;
 
   const action = decideDepositConfirmedAction({
@@ -69,7 +70,9 @@ async function reconcileDepositConfirmed(
   });
 
   if (action.type === "advance_to_released" && found) {
-    const explanation = await explainRouteDecision(paymentDecisionForExplanation(payment));
+    const explanation = await explainRouteDecision(paymentDecisionForExplanation(payment), {
+      destChainName: getChainName(payment.toChainId),
+    });
     await markReleased(payment.id, found.transactionHash, explanation);
     releaseAttemptsByPaymentId.delete(payment.id);
     return;
@@ -78,8 +81,15 @@ async function reconcileDepositConfirmed(
   if (action.type === "retry_release") {
     releaseAttemptsByPaymentId.set(payment.id, attempts + 1);
     try {
-      const { txHash } = await submitRelease(payment.recipient, BigInt(payment.payoutAmount), payment.sourceTxHash);
-      const explanation = await explainRouteDecision(paymentDecisionForExplanation(payment));
+      const { txHash } = await submitRelease(
+        payment.toChainId,
+        payment.recipient,
+        BigInt(payment.payoutAmount),
+        payment.sourceTxHash,
+      );
+      const explanation = await explainRouteDecision(paymentDecisionForExplanation(payment), {
+      destChainName: getChainName(payment.toChainId),
+    });
       await markReleased(payment.id, txHash, explanation);
       releaseAttemptsByPaymentId.delete(payment.id);
     } catch {

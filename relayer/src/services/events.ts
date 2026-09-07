@@ -1,13 +1,8 @@
-import type { PublicClient } from "viem";
 import sourceVaultAbi from "../abi/SourceVault.json" with { type: "json" };
 import destPoolAbi from "../abi/DestPool.json" with { type: "json" };
-import { sepoliaPublicClient } from "../chains/sepolia.js";
-import { baseSepoliaPublicClient } from "../chains/baseSepolia.js";
-import { hskPublicClient } from "../chains/hsk.js";
-import { requireEnv } from "../env.js";
+import { listDestinationChainIds, listSourceChainIds } from "../chains/chainIds.js";
+import { getDestPoolAddress, getPublicClient, getSourceVaultContract } from "../chains/registry.js";
 
-const SEPOLIA_CHAIN_ID = 11155111;
-const BASE_SEPOLIA_CHAIN_ID = 84532;
 const RECONCILER_LOOKBACK_BLOCKS = 200_000n;
 
 export interface PaymentRequestedEvent {
@@ -20,16 +15,20 @@ export interface PaymentRequestedEvent {
   transactionHash: `0x${string}`;
 }
 
-function watchPaymentRequestedOn(
-  publicClient: PublicClient<any, any>,
-  sourceVaultAddress: `0x${string}`,
+async function watchPaymentRequestedOn(
+  fromChainId: number,
   onEvent: (event: PaymentRequestedEvent) => void,
-): () => void {
+): Promise<() => void> {
+  const [publicClient, sourceVaultContract] = await Promise.all([
+    getPublicClient(fromChainId),
+    getSourceVaultContract(fromChainId),
+  ]);
+
   return publicClient.watchContractEvent({
-    address: sourceVaultAddress,
+    address: sourceVaultContract.address,
     abi: sourceVaultAbi,
     eventName: "PaymentRequested",
-    onLogs: (logs) => {
+    onLogs: (logs: unknown[]) => {
       for (const log of logs) {
         const { args, blockNumber, transactionHash } = log as unknown as {
           args: { payer: `0x${string}`; recipient: `0x${string}`; amount: bigint; destChainId: bigint; nonce: bigint };
@@ -50,14 +49,15 @@ function watchPaymentRequestedOn(
   });
 }
 
-export function watchPaymentRequested(onEvent: (event: PaymentRequestedEvent) => void): () => void {
-  const sourceVaultAddress = requireEnv("SOURCE_VAULT_ADDRESS") as `0x${string}`;
-  return watchPaymentRequestedOn(sepoliaPublicClient, sourceVaultAddress, onEvent);
-}
-
-export function watchBaseSepoliaPaymentRequested(onEvent: (event: PaymentRequestedEvent) => void): () => void {
-  const sourceVaultAddress = requireEnv("BASE_SEPOLIA_SOURCE_VAULT_ADDRESS") as `0x${string}`;
-  return watchPaymentRequestedOn(baseSepoliaPublicClient, sourceVaultAddress, onEvent);
+export async function watchAllPaymentRequested(
+  onEvent: (fromChainId: number, event: PaymentRequestedEvent) => void,
+): Promise<() => void> {
+  const unwatchFns = await Promise.all(
+    listSourceChainIds().map((chainId) => watchPaymentRequestedOn(chainId, (event) => onEvent(chainId, event))),
+  );
+  return () => {
+    for (const unwatch of unwatchFns) unwatch();
+  };
 }
 
 export interface ReleasedEvent {
@@ -69,13 +69,17 @@ export interface ReleasedEvent {
   transactionHash: `0x${string}`;
 }
 
-export function watchReleased(onEvent: (event: ReleasedEvent) => void): () => void {
-  const destPoolAddress = requireEnv("DEST_POOL_ADDRESS") as `0x${string}`;
-  return hskPublicClient.watchContractEvent({
+async function watchReleasedOn(toChainId: number, onEvent: (event: ReleasedEvent) => void): Promise<() => void> {
+  const [publicClient, destPoolAddress] = await Promise.all([
+    getPublicClient(toChainId),
+    getDestPoolAddress(toChainId),
+  ]);
+
+  return publicClient.watchContractEvent({
     address: destPoolAddress,
     abi: destPoolAbi,
     eventName: "Released",
-    onLogs: (logs) => {
+    onLogs: (logs: unknown[]) => {
       for (const log of logs) {
         const { args, blockNumber, transactionHash } = log as unknown as {
           args: { recipient: `0x${string}`; amount: bigint; fee: bigint; sourceRef: `0x${string}` };
@@ -95,16 +99,15 @@ export function watchReleased(onEvent: (event: ReleasedEvent) => void): () => vo
   });
 }
 
-function sourceVaultAddressForChain(fromChainId: number): `0x${string}` {
-  if (fromChainId === SEPOLIA_CHAIN_ID) return requireEnv("SOURCE_VAULT_ADDRESS") as `0x${string}`;
-  if (fromChainId === BASE_SEPOLIA_CHAIN_ID) return requireEnv("BASE_SEPOLIA_SOURCE_VAULT_ADDRESS") as `0x${string}`;
-  throw new Error(`Unsupported fromChainId: ${fromChainId}`);
-}
-
-function publicClientForChain(fromChainId: number): PublicClient<any, any> {
-  if (fromChainId === SEPOLIA_CHAIN_ID) return sepoliaPublicClient;
-  if (fromChainId === BASE_SEPOLIA_CHAIN_ID) return baseSepoliaPublicClient;
-  throw new Error(`Unsupported fromChainId: ${fromChainId}`);
+export async function watchAllReleased(
+  onEvent: (toChainId: number, event: ReleasedEvent) => void,
+): Promise<() => void> {
+  const unwatchFns = await Promise.all(
+    listDestinationChainIds().map((chainId) => watchReleasedOn(chainId, (event) => onEvent(chainId, event))),
+  );
+  return () => {
+    for (const unwatch of unwatchFns) unwatch();
+  };
 }
 
 export interface PaymentRequestedLookup {
@@ -124,13 +127,15 @@ export async function findPaymentRequested(
   fromChainId: number,
   lookup: PaymentRequestedLookup,
 ): Promise<PaymentRequestedEvent | null> {
-  const publicClient = publicClientForChain(fromChainId);
-  const address = sourceVaultAddressForChain(fromChainId);
+  const [publicClient, sourceVaultContract] = await Promise.all([
+    getPublicClient(fromChainId),
+    getSourceVaultContract(fromChainId),
+  ]);
   const latestBlock = await publicClient.getBlockNumber();
   const fromBlock = latestBlock > RECONCILER_LOOKBACK_BLOCKS ? latestBlock - RECONCILER_LOOKBACK_BLOCKS : 0n;
 
   const logs = await publicClient.getContractEvents({
-    address,
+    address: sourceVaultContract.address,
     abi: sourceVaultAbi,
     eventName: "PaymentRequested",
     fromBlock,
@@ -163,12 +168,18 @@ export async function findPaymentRequested(
   return null;
 }
 
-export async function findReleasedBySourceRef(sourceRef: `0x${string}`): Promise<ReleasedEvent | null> {
-  const destPoolAddress = requireEnv("DEST_POOL_ADDRESS") as `0x${string}`;
-  const latestBlock = await hskPublicClient.getBlockNumber();
+export async function findReleasedBySourceRef(
+  toChainId: number,
+  sourceRef: `0x${string}`,
+): Promise<ReleasedEvent | null> {
+  const [publicClient, destPoolAddress] = await Promise.all([
+    getPublicClient(toChainId),
+    getDestPoolAddress(toChainId),
+  ]);
+  const latestBlock = await publicClient.getBlockNumber();
   const fromBlock = latestBlock > RECONCILER_LOOKBACK_BLOCKS ? latestBlock - RECONCILER_LOOKBACK_BLOCKS : 0n;
 
-  const logs = await hskPublicClient.getContractEvents({
+  const logs = await publicClient.getContractEvents({
     address: destPoolAddress,
     abi: destPoolAbi,
     eventName: "Released",

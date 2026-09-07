@@ -10,7 +10,10 @@ const DEFAULT_TOKEN_SYMBOL = "USDC";
 interface ExplainContext {
   tokenSymbol?: string;
   tokenDecimals?: number;
+  destChainName?: string;
 }
+
+const DEFAULT_DEST_CHAIN_NAME = "the destination chain";
 
 const REJECTION_MESSAGES: Record<string, string> = {
   InsufficientLiquidity:
@@ -27,9 +30,14 @@ function explainRejection(reason: string | undefined): string {
   return "Bridge unavailable right now — this payment can't be routed.";
 }
 
-function templatedStatus(decision: RouteDecision, tokenSymbol: string, tokenDecimals: number): string {
+function templatedStatus(
+  decision: RouteDecision,
+  tokenSymbol: string,
+  tokenDecimals: number,
+  destChainName: string,
+): string {
   const feeDisplay = formatUnits(decision.feeAmount, tokenDecimals);
-  return `Bridged via HSK testnet · fee ${feeDisplay} ${tokenSymbol} · ${decision.estimatedSeconds}s`;
+  return `Bridged to ${destChainName} · fee ${feeDisplay} ${tokenSymbol} · ${decision.estimatedSeconds}s`;
 }
 
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -48,6 +56,7 @@ async function generateLlmSummary(
   decision: RouteDecision,
   tokenSymbol: string,
   tokenDecimals: number,
+  destChainName: string,
 ): Promise<string> {
   const client = new Anthropic();
   const feeDisplay = formatUnits(decision.feeAmount, tokenDecimals);
@@ -63,9 +72,9 @@ async function generateLlmSummary(
           content:
             "Write one short, natural sentence for a UI status message summarizing a completed cross-chain bridge payment. " +
             "Use only these facts, do not invent anything: " +
-            `bridged via HSK testnet, fee ${feeDisplay} ${tokenSymbol}, payout ${payoutDisplay} ${tokenSymbol}, ` +
+            `bridged to ${destChainName}, fee ${feeDisplay} ${tokenSymbol}, payout ${payoutDisplay} ${tokenSymbol}, ` +
             `estimated time ${decision.estimatedSeconds} seconds. ` +
-            "Style example: 'Routed via HSK testnet, gas cost ~$0.02, fee 0.5 USDC, done in 8s.' " +
+            `Style example: 'Routed to ${destChainName}, gas cost ~$0.02, fee 0.5 USDC, done in 8s.' ` +
             "Respond with only the sentence, no preamble or quotes.",
         },
       ],
@@ -91,14 +100,15 @@ export async function explainRouteDecision(
 
   const tokenSymbol = context?.tokenSymbol ?? DEFAULT_TOKEN_SYMBOL;
   const tokenDecimals = context?.tokenDecimals ?? DEFAULT_TOKEN_DECIMALS;
+  const destChainName = context?.destChainName ?? DEFAULT_DEST_CHAIN_NAME;
 
   if (!process.env.ANTHROPIC_API_KEY) {
-    return templatedStatus(decision, tokenSymbol, tokenDecimals);
+    return templatedStatus(decision, tokenSymbol, tokenDecimals, destChainName);
   }
 
   try {
-    return await generateLlmSummary(decision, tokenSymbol, tokenDecimals);
+    return await generateLlmSummary(decision, tokenSymbol, tokenDecimals, destChainName);
   } catch {
-    return templatedStatus(decision, tokenSymbol, tokenDecimals);
+    return templatedStatus(decision, tokenSymbol, tokenDecimals, destChainName);
   }
 }

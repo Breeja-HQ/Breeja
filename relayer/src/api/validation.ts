@@ -1,4 +1,5 @@
 import { isAddress } from "viem";
+import { isSupportedDestinationChain, isSupportedSourceChain } from "../chains/chainIds.js";
 
 export interface PaymentAuthorization {
   validAfter: string;
@@ -18,8 +19,6 @@ export interface PayRequestBody {
   authorization?: PaymentAuthorization;
 }
 
-const SUPPORTED_SOURCE_CHAIN_IDS = [11155111, 84532];
-
 export function isPositiveBigint(value: string): boolean {
   try {
     return BigInt(value) > 0n;
@@ -30,10 +29,13 @@ export function isPositiveBigint(value: string): boolean {
 
 export function validatePayRequest(body: Partial<PayRequestBody>): string | null {
   if (typeof body.fromChainId !== "number") return "fromChainId is required and must be a number";
-  if (!SUPPORTED_SOURCE_CHAIN_IDS.includes(body.fromChainId)) {
-    return "fromChainId must be one of: 11155111 (Sepolia), 84532 (Base Sepolia)";
+  if (!isSupportedSourceChain(body.fromChainId)) {
+    return "fromChainId is not a supported source chain";
   }
   if (typeof body.toChainId !== "number") return "toChainId is required and must be a number";
+  if (!isSupportedDestinationChain(body.toChainId)) {
+    return "toChainId is not a supported destination chain";
+  }
   if (typeof body.payer !== "string" || !isAddress(body.payer)) return "payer must be a valid address";
   if (typeof body.recipient !== "string" || !isAddress(body.recipient)) return "recipient must be a valid address";
   if (typeof body.amount !== "string" || !isPositiveBigint(body.amount)) {

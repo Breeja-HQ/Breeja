@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { decideRoute } from "../agent/router.js";
 import { explainRouteDecision } from "../agent/explain.js";
+import { getChainName } from "../chains/chainIds.js";
 import { validatePayRequest, type PayRequestBody } from "./validation.js";
 import { requireApiKey } from "../middleware/auth.js";
 import { rateLimitByApiKey } from "../middleware/rateLimit.js";
@@ -56,7 +57,7 @@ async function runDepositAndRelease(id: string, body: PayRequestBody): Promise<v
 
     await markDepositConfirmed(id, sourceTxHash);
 
-    const { txHash: destTxHash } = await submitRelease(recipient, amount, sourceTxHash);
+    const { txHash: destTxHash } = await submitRelease(body.toChainId, recipient, amount, sourceTxHash);
     const decision = await decideRoute({
       payer,
       recipient,
@@ -64,7 +65,7 @@ async function runDepositAndRelease(id: string, body: PayRequestBody): Promise<v
       fromChainId: body.fromChainId,
       toChainId: body.toChainId,
     });
-    const explanation = await explainRouteDecision(decision);
+    const explanation = await explainRouteDecision(decision, { destChainName: getChainName(body.toChainId) });
 
     await markReleased(id, destTxHash, explanation);
   } catch (error) {

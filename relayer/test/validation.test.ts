@@ -3,7 +3,7 @@ import { validatePayRequest, isPositiveBigint, type PayRequestBody } from "../sr
 
 const VALID_BODY: PayRequestBody = {
   fromChainId: 11155111,
-  toChainId: 133,
+  toChainId: 84532,
   payer: "0x1111111111111111111111111111111111111111",
   recipient: "0x2222222222222222222222222222222222222222",
   amount: "1000000",
@@ -48,7 +48,7 @@ describe("validatePayRequest", () => {
   });
 
   it("rejects an unsupported fromChainId", () => {
-    expect(validatePayRequest({ ...VALID_BODY, fromChainId: 1 })).toMatch(/fromChainId must be one of/);
+    expect(validatePayRequest({ ...VALID_BODY, fromChainId: 1 })).toMatch(/fromChainId is not a supported source chain/);
   });
 
   it("rejects a missing toChainId", () => {
@@ -57,7 +57,13 @@ describe("validatePayRequest", () => {
   });
 
   it("rejects a non-number toChainId", () => {
-    expect(validatePayRequest({ ...VALID_BODY, toChainId: "133" as unknown as number })).toMatch(/toChainId/);
+    expect(validatePayRequest({ ...VALID_BODY, toChainId: "84532" as unknown as number })).toMatch(/toChainId/);
+  });
+
+  it("rejects a source-only chain as toChainId", () => {
+    expect(validatePayRequest({ ...VALID_BODY, toChainId: 11155111 })).toMatch(
+      /toChainId is not a supported destination chain/,
+    );
   });
 
   it("rejects a missing payer", () => {

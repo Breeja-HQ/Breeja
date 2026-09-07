@@ -1,9 +1,4 @@
-import { sepoliaPublicClient, sourceVaultContract as sepoliaSourceVaultContract } from "../chains/sepolia.js";
-import { baseSepoliaPublicClient, sourceVaultContract as baseSepoliaSourceVaultContract } from "../chains/baseSepolia.js";
-import { hskPublicClient, destPoolContract } from "../chains/hsk.js";
-
-const SEPOLIA_CHAIN_ID = 11155111;
-const BASE_SEPOLIA_CHAIN_ID = 84532;
+import { getDestPoolContract, getPublicClient, getSourceVaultContract } from "../chains/registry.js";
 
 export interface DepositParams {
   payer: `0x${string}`;
@@ -33,17 +28,14 @@ export async function submitDepositWithAuthorization(params: DepositParams): Pro
     params.s,
   ] as const;
 
-  if (params.fromChainId === SEPOLIA_CHAIN_ID) {
-    const hash = await sepoliaSourceVaultContract.write.depositWithAuthorization(args);
-    const receipt = await sepoliaPublicClient.waitForTransactionReceipt({ hash });
-    return { txHash: receipt.transactionHash };
-  }
-  if (params.fromChainId === BASE_SEPOLIA_CHAIN_ID) {
-    const hash = await baseSepoliaSourceVaultContract.write.depositWithAuthorization(args);
-    const receipt = await baseSepoliaPublicClient.waitForTransactionReceipt({ hash });
-    return { txHash: receipt.transactionHash };
-  }
-  throw new Error(`Unsupported fromChainId: ${params.fromChainId}`);
+  const [sourceVaultContract, publicClient] = await Promise.all([
+    getSourceVaultContract(params.fromChainId),
+    getPublicClient(params.fromChainId),
+  ]);
+
+  const hash = await sourceVaultContract.write.depositWithAuthorization(args);
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  return { txHash: receipt.transactionHash };
 }
 
 export interface FallbackDepositParams {
@@ -57,25 +49,28 @@ export interface FallbackDepositParams {
 export async function submitDeposit(params: FallbackDepositParams): Promise<{ txHash: `0x${string}` }> {
   const args = [params.payer, params.recipient, params.amount, params.destChainId] as const;
 
-  if (params.fromChainId === SEPOLIA_CHAIN_ID) {
-    const hash = await sepoliaSourceVaultContract.write.deposit(args);
-    const receipt = await sepoliaPublicClient.waitForTransactionReceipt({ hash });
-    return { txHash: receipt.transactionHash };
-  }
-  if (params.fromChainId === BASE_SEPOLIA_CHAIN_ID) {
-    const hash = await baseSepoliaSourceVaultContract.write.deposit(args);
-    const receipt = await baseSepoliaPublicClient.waitForTransactionReceipt({ hash });
-    return { txHash: receipt.transactionHash };
-  }
-  throw new Error(`Unsupported fromChainId: ${params.fromChainId}`);
+  const [sourceVaultContract, publicClient] = await Promise.all([
+    getSourceVaultContract(params.fromChainId),
+    getPublicClient(params.fromChainId),
+  ]);
+
+  const hash = await sourceVaultContract.write.deposit(args);
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  return { txHash: receipt.transactionHash };
 }
 
 export async function submitRelease(
+  toChainId: number,
   recipient: `0x${string}`,
   amount: bigint,
   sourceRef: `0x${string}`,
 ): Promise<{ txHash: `0x${string}` }> {
+  const [destPoolContract, publicClient] = await Promise.all([
+    getDestPoolContract(toChainId),
+    getPublicClient(toChainId),
+  ]);
+
   const hash = await destPoolContract.write.release([recipient, amount, sourceRef]);
-  const receipt = await hskPublicClient.waitForTransactionReceipt({ hash });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
   return { txHash: receipt.transactionHash };
 }

@@ -7,8 +7,8 @@ import {SourceVault} from "../src/SourceVault.sol";
 contract DeploySourceVault is Script {
     function run() external returns (SourceVault) {
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
-        address usdc = vm.envAddress("SEPOLIA_USDC_ADDRESS");
-        address relayer = vm.envAddress("SEPOLIA_RELAYER_ADDRESS");
+        address usdc = vm.envAddress("USDC_ADDRESS");
+        address relayer = vm.envAddress("RELAYER_ADDRESS");
 
         vm.startBroadcast(privateKey);
         SourceVault vault = new SourceVault(usdc, relayer);

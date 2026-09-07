@@ -8,14 +8,14 @@ import {
 
 const SEPOLIA_CHAIN_ID = 11155111;
 const BASE_SEPOLIA_CHAIN_ID = 84532;
-const HSK_CHAIN_ID = 133;
+const ARBITRUM_SEPOLIA_CHAIN_ID = 421614;
 
 const VALID_REQUEST: PaymentRequest = {
   payer: "0x1111111111111111111111111111111111111111",
   recipient: "0x2222222222222222222222222222222222222222",
   amount: 1_000_000n,
   fromChainId: SEPOLIA_CHAIN_ID,
-  toChainId: HSK_CHAIN_ID,
+  toChainId: BASE_SEPOLIA_CHAIN_ID,
 };
 
 const VIABLE_CHAIN_STATE: ChainState = {
@@ -23,7 +23,7 @@ const VIABLE_CHAIN_STATE: ChainState = {
   feeBpsRaw: 50n,
   destPoolBalance: 10_000_000n,
   sourceChainGasPriceWei: 1_000_000_000n,
-  hskGasPriceWei: 1_000_000_000n,
+  destChainGasPriceWei: 1_000_000_000n,
 };
 
 // checkRequestRejection is the exact pre-chain-call gate that decideRoute in
@@ -38,13 +38,29 @@ describe("decideRoute rejection branches (via checkRequestRejection)", () => {
     expect(result?.viable).toBe(false);
   });
 
-  it("accepts base sepolia as a supported source chain", () => {
-    const result = checkRequestRejection({ ...VALID_REQUEST, fromChainId: BASE_SEPOLIA_CHAIN_ID });
+  it("accepts arbitrum sepolia as a supported source chain", () => {
+    const result = checkRequestRejection({ ...VALID_REQUEST, fromChainId: ARBITRUM_SEPOLIA_CHAIN_ID });
     expect(result).toBeNull();
   });
 
   it("rejects an unsupported destination chain", () => {
     const result = checkRequestRejection({ ...VALID_REQUEST, toChainId: 8453 });
+    expect(result).not.toBeNull();
+    expect(result?.reason).toBe("UnsupportedDestChain");
+  });
+
+  it("rejects ethereum sepolia as a destination (source-only)", () => {
+    const result = checkRequestRejection({ ...VALID_REQUEST, toChainId: SEPOLIA_CHAIN_ID });
+    expect(result).not.toBeNull();
+    expect(result?.reason).toBe("UnsupportedDestChain");
+  });
+
+  it("rejects a request where fromChainId equals toChainId", () => {
+    const result = checkRequestRejection({
+      ...VALID_REQUEST,
+      fromChainId: BASE_SEPOLIA_CHAIN_ID,
+      toChainId: BASE_SEPOLIA_CHAIN_ID,
+    });
     expect(result).not.toBeNull();
     expect(result?.reason).toBe("UnsupportedDestChain");
   });
@@ -137,9 +153,9 @@ describe("evaluateRouteViability", () => {
     const decision = evaluateRouteViability(VALID_REQUEST, {
       ...VIABLE_CHAIN_STATE,
       sourceChainGasPriceWei: 42n,
-      hskGasPriceWei: 7n,
+      destChainGasPriceWei: 7n,
     });
     expect(decision.sourceChainGasPriceWei).toBe(42n);
-    expect(decision.hskGasPriceWei).toBe(7n);
+    expect(decision.destChainGasPriceWei).toBe(7n);
   });
 });
