@@ -1,0 +1,26 @@
+{
+  "name": "@breeja/mcp",
+  "version": "0.1.0",
+  "description": "MCP server exposing Breeja cross-chain payments as agent tools",
+  "type": "module",
+  "bin": {
+    "breeja-mcp": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@breeja/sdk": "file:../sdk",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "viem": "^2.21.54",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.11",
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.11"
+  }
+}
