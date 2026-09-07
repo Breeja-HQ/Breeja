@@ -2,7 +2,7 @@
 
 > Audience: coding agents first, humans second.
 
-Next.js App Router. Design system is [font-theme.md](font-theme.md) and it is authoritative — neo-brutalist, hard 2px borders, offset shadows with zero blur, square corners except pills, oklch paper background.
+Next.js App Router. Colors and surfaces follow the theme already live in `frontend/app/globals.css` — white surface, near-black ink, a single accent, soft rounded corners. [font-theme.md](font-theme.md) is authoritative for typography only: font families, sizes, weights, letter-spacing, line-height.
 
 ## Routes
 
@@ -77,19 +77,17 @@ The requirements in [SDK.md](SDK.md) are binding. Restated:
 - "For agents" section above the fold with `llms.txt` and MCP config.
 - Tabs: `pay`, `quote`, `watch`, MCP, x402.
 
-Styling: JetBrains Mono for code, the `--of-line` border token on code blocks, offset shadow. Code blocks are the primary content — give them the visual weight the design system reserves for cards.
+Styling: Geist Mono for code, `border-border` and `rounded-xl` on code blocks, matching every other panel in the app. Code blocks are the primary content — give them the visual weight the design system reserves for cards.
 
 ## Design system compliance
 
-From [font-theme.md](font-theme.md), the rules most often violated:
+From [font-theme.md](font-theme.md), the typography rules most often violated:
 
-- `var(--of-line)` for every border. Never `2px solid black`.
-- Shadows have zero blur: `box-shadow: 6px 6px 0 var(--of-ink)`.
-- No `border-radius` except `999px` pills.
 - Headings constrained by `ch`, not px.
 - Weights 600 and above only.
 - `680px` is the primary breakpoint.
-- Wrap the app in `.overflow-theme`.
+
+Colors, borders, and corner radii come from `frontend/app/globals.css` (`--color-accent`, `--color-border`, etc.) — never hardcode a hex value or introduce a second palette.
 
 ## Required states
 

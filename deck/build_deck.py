@@ -1,24 +1,27 @@
+import os
 from pptx import Presentation
 from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
 
-INK      = RGBColor(0x14, 0x1A, 0x24)
-PAPER    = RGBColor(0xF4, 0xF5, 0xF7)
-PANEL    = RGBColor(0xFC, 0xFD, 0xFE)
-WARM     = RGBColor(0xF2, 0xE8, 0xD5)
-MUTED    = RGBColor(0x6B, 0x74, 0x82)
-BLUE     = RGBColor(0x5B, 0xA4, 0xFF)
-YELLOW   = RGBColor(0xFF, 0xCC, 0x33)
-MINT     = RGBColor(0x53, 0xDC, 0xA2)
-ORANGE   = RGBColor(0xFF, 0x84, 0x1F)
-LAVENDER = RGBColor(0xD0, 0xA1, 0xFF)
-PINK     = RGBColor(0xFF, 0x86, 0xB9)
+# Matches frontend/app/globals.css — the single live theme, no palette of its own.
+INK      = RGBColor(0x0A, 0x0A, 0x0A)   # --foreground
+PAPER    = RGBColor(0xFF, 0xFF, 0xFF)   # --background
+PANEL    = RGBColor(0xFF, 0xFF, 0xFF)   # --color-surface
+WARM     = RGBColor(0xFD, 0xED, 0xE7)   # --color-badge-bg
+MUTED    = RGBColor(0x6B, 0x72, 0x80)   # --color-body
+BORDER   = RGBColor(0xE5, 0xE7, 0xEB)   # --color-border
+ACCENT   = RGBColor(0xF4, 0x62, 0x3A)   # --color-accent
 
-DISPLAY = "Space Grotesk"
-SANS    = "Inter"
-MONO    = "JetBrains Mono"
+# No hue-coding: category/status distinctions that used to rely on different
+# accent colors now use ink (primary/solid) vs muted (secondary) vs the one
+# accent, same as the frontend distinguishes emphasis without color-coding.
+BLUE = YELLOW = MINT = ORANGE = LAVENDER = PINK = ACCENT
+
+DISPLAY = "Geist"
+SANS    = "Geist"
+MONO    = "Geist Mono"
 
 W, H = Inches(13.333), Inches(7.5)
 M = Inches(0.62)
@@ -233,7 +236,7 @@ for i, (n, t, d) in enumerate(steps):
     text(s, x + Inches(0.24), y + Inches(0.95), cw - Inches(0.48), Inches(0.8), d,
          size=12, color=MUTED, line_spacing=1.3)
 
-gn = box(s, M, Inches(5.12), CW, Inches(0.62), fill=MINT, shadow=INK)
+gn = box(s, M, Inches(5.12), CW, Inches(0.62), fill=WARM, shadow=INK)
 celltext(gn, "Neither payer nor recipient ever holds a gas token.",
          size=14, font=MONO, bold=True, align=PP_ALIGN.CENTER, pad=0)
 
@@ -244,10 +247,10 @@ eyebrow(s, "Same rail, four callers")
 heading(s, "Built for software first.", Inches(0.95))
 
 doors = [
-    ("Human · Web app", BLUE, "Connect a wallet, pick chains, sign, watch it land live.", None),
-    ("Agent · SDK", MINT, "One call, no browser, no gas.", "await breeja.pay({ … })"),
-    ("Agent · MCP", LAVENDER, "Claude pays across chains as a tool call, with spend caps enforced.", None),
-    ("Agent · x402", YELLOW, "Hit a paywalled endpoint, settle, retry with proof. Cross-chain.", None),
+    ("Human · Web app", WARM, "Connect a wallet, pick chains, sign, watch it land live.", None),
+    ("Agent · SDK", WARM, "One call, no browser, no gas.", "await breeja.pay({ … })"),
+    ("Agent · MCP", WARM, "Claude pays across chains as a tool call, with spend caps enforced.", None),
+    ("Agent · x402", WARM, "Hit a paywalled endpoint, settle, retry with proof. Cross-chain.", None),
 ]
 dw = (CW - Inches(0.3)) / 2
 dh = Inches(1.62)
@@ -256,7 +259,7 @@ for i, (title, col, body, code) in enumerate(doors):
     y = Inches(2.15) + (dh + Inches(0.3)) * (i // 2)
     box(s, x, y, dw, dh, fill=PANEL, shadow=INK)
     hd = box(s, x, y, dw, Inches(0.48), fill=col)
-    celltext(hd, title, size=11, font=MONO, bold=True, spacing=1.2)
+    celltext(hd, title, size=11, font=MONO, bold=True, spacing=1.2, color=ACCENT)
     text(s, x + Inches(0.22), y + Inches(0.68), dw - Inches(0.44), Inches(0.5), body,
          size=13, color=MUTED, line_spacing=1.3)
     if code:
@@ -336,8 +339,8 @@ for i, hd in enumerate(heads):
     x += cols[i]
 
 rows = [
-    ("Fast pool", "~10s", "0.5%", ("Custodial", YELLOW), "Small, latency-sensitive payments"),
-    ("CCTP", "~15m", "gas only", ("Trust-minimized", MINT), "Large transfers, canonical guarantees"),
+    ("Fast pool", "~10s", "0.5%", ("Custodial", MUTED, PAPER), "Small, latency-sensitive payments"),
+    ("CCTP", "~15m", "gas only", ("Trust-minimized", WARM, ACCENT), "Large transfers, canonical guarantees"),
 ]
 for ri, (a, b, c_, tagd, e) in enumerate(rows):
     yy = y + rowh + ri * Inches(0.66)
@@ -346,10 +349,10 @@ for ri, (a, b, c_, tagd, e) in enumerate(rows):
     for i, v in enumerate(vals):
         cell = box(s, x, yy, cols[i], Inches(0.66), fill=PANEL)
         if i == 3:
-            label, tcol = tagd
+            label, tcol, txtcol = tagd
             tw = Inches(0.24 + 0.088 * len(label))
             tg = box(s, x + Inches(0.16), yy + Inches(0.17), tw, Inches(0.32), fill=tcol)
-            celltext(tg, label, size=10, font=MONO, bold=True, align=PP_ALIGN.CENTER, pad=0)
+            celltext(tg, label, size=10, font=MONO, bold=True, align=PP_ALIGN.CENTER, pad=0, color=txtcol)
         else:
             celltext(cell, v, size=13, bold=(i == 0),
                      font=MONO if i in (1, 2) else SANS)
@@ -367,18 +370,18 @@ heading(s, "Models explain. They never decide.", Inches(0.95))
 lede(s, "The boundary is enforced in code, and it's why the system is auditable.", Inches(1.95))
 
 bcols = [
-    ("LLM permitted", MINT, ["Parse natural-language intent", "Explain a completed decision"]),
-    ("Deterministic", BLUE, ["Validate the request", "Select the route", "Compute the fee"]),
-    ("LLM forbidden", PINK, ["Choosing where money goes", "Authorizing a release"]),
+    ("LLM permitted", WARM, INK, ["Parse natural-language intent", "Explain a completed decision"]),
+    ("Deterministic", INK, PAPER, ["Validate the request", "Select the route", "Compute the fee"]),
+    ("LLM forbidden", MUTED, PAPER, ["Choosing where money goes", "Authorizing a release"]),
 ]
 bw = CW / 3
 by = Inches(2.85)
 bh = Inches(1.92)
 box(s, M, by, CW, bh, fill=PANEL)
-for i, (hd, col, items) in enumerate(bcols):
+for i, (hd, col, txtcol, items) in enumerate(bcols):
     x = M + bw * i
     h = box(s, x, by, bw, Inches(0.48), fill=col)
-    celltext(h, hd, size=11, font=MONO, bold=True, spacing=1.2)
+    celltext(h, hd, size=11, font=MONO, bold=True, spacing=1.2, color=txtcol)
     for j, it in enumerate(items):
         iy = by + Inches(0.48) + j * Inches(0.48)
         c = box(s, x, iy, bw, Inches(0.48), fill=PANEL)
@@ -387,7 +390,7 @@ for i, (hd, col, items) in enumerate(bcols):
         v = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, x, by, Pt(2.25), bh)
         v.fill.solid(); v.fill.fore_color.rgb = INK; v.line.fill.background(); v.shadow.inherit = False
 
-co = box(s, M, Inches(5.15), CW, Inches(0.92), fill=YELLOW, shadow=INK)
+co = box(s, M, Inches(5.15), CW, Inches(0.92), fill=WARM, shadow=INK)
 celltext(co, "Every number in a generated explanation is validated against the decision object. Mismatch falls back to a template — a model never states a fee the system didn't compute.",
          size=13.5, bold=True, pad=Inches(0.28), line_spacing=1.3)
 
@@ -461,7 +464,7 @@ for it in nots:
     text(s, M + tw + Inches(0.6), yy, tw - Inches(0.94), Inches(0.8), it, size=12.5, color=MUTED, line_spacing=1.25)
     yy += Inches(0.78)
 
-co = box(s, M, Inches(5.05), CW, Inches(0.72), fill=YELLOW, shadow=INK)
+co = box(s, M, Inches(5.05), CW, Inches(0.72), fill=WARM, shadow=INK)
 celltext(co, "Same tradeoff early Across and Hop shipped — and the honest reason the fast route is fast.",
          size=14, bold=True, align=PP_ALIGN.CENTER, pad=Inches(0.2))
 
@@ -510,12 +513,12 @@ eyebrow(s, "Status")
 heading(s, "Shipped, in flight, next.", Inches(0.95))
 
 items = [
-    ("EIP-3009 gasless permits, live on real testnets", "Shipped", MINT),
-    ("Contracts covered by tests, deployed and verified", "Shipped", MINT),
-    ("Agent-to-agent payment, no browser in the loop", "Shipped", MINT),
-    ("Durable state, idempotency, reconciliation", "In flight", YELLOW),
-    ("Multi-chain mesh + CCTP route scoring", "In flight", YELLOW),
-    ("SDK, MCP server, x402 demo", "In flight", YELLOW),
+    ("EIP-3009 gasless permits, live on real testnets", "Shipped", INK),
+    ("Contracts covered by tests, deployed and verified", "Shipped", INK),
+    ("Agent-to-agent payment, no browser in the loop", "Shipped", INK),
+    ("Durable state, idempotency, reconciliation", "In flight", ACCENT),
+    ("Multi-chain mesh + CCTP route scoring", "In flight", ACCENT),
+    ("SDK, MCP server, x402 demo", "In flight", ACCENT),
     ("Bonded watcher network — decentralized release", "Next", PANEL),
     ("Mainnet with funded liquidity and multisig custody", "Next", PANEL),
 ]
@@ -527,7 +530,7 @@ for i, (label, state, col) in enumerate(items):
     if i:
         hl = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, M, y, CW, Pt(2.25))
         hl.fill.solid(); hl.fill.fore_color.rgb = INK; hl.line.fill.background(); hl.shadow.inherit = False
-    d = box(s, M + Inches(0.26), y + Inches(0.18), Inches(0.2), Inches(0.2), fill=col)
+    d = box(s, M + Inches(0.26), y + Inches(0.18), Inches(0.2), Inches(0.2), fill=col, line=BORDER, lw=1.25)
     text(s, M + Inches(0.66), y + Inches(0.15), Inches(8.6), Inches(0.3), label, size=13.5)
     text(s, W - M - Inches(1.7), y + Inches(0.17), Inches(1.5), Inches(0.3), state,
          size=10.5, font=MONO, bold=True, color=MUTED, spacing=1.2, align=PP_ALIGN.RIGHT, caps=True)
@@ -561,6 +564,6 @@ for i, (t, d) in enumerate(asks):
     text(s, x + Inches(0.26), Inches(4.9), aw - Inches(0.52), Inches(0.7), d,
          size=13, color=PAPER, line_spacing=1.35)
 
-out = "/private/tmp/claude-501/-Users-admin-breeja/18f7b1e1-3bf3-4083-988e-1c0e1f9d7b62/scratchpad/Breeja-Pitch-Deck.pptx"
+out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Breeja-Pitch-Deck.pptx")
 prs.save(out)
 print("saved", out)

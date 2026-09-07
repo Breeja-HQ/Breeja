@@ -117,7 +117,7 @@ State this plainly if asked — a deliberate exclusion reads better than a force
 
 Requirements for the logo section on the landing page:
 
-- Logos rendered in the neo-brutalist treatment from [font-theme.md](font-theme.md): hard 2px borders, offset shadows, no blur, square corners.
+- Logos styled consistently with the rest of the app — the theme in `frontend/app/globals.css` (`--color-border`, rounded panels), not a separate treatment.
 - Each logo is a link to that integration's section in `/docs`, not to the sponsor's homepage. It documents what Breeja does with them.
 - One line per partner naming the actual integration: "Circle — CCTP settlement route", "The Graph — indexed payment history".
 - Only ship a logo once the integration works. A logo wall of aspirations is checkable and damaging.

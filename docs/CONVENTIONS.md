@@ -88,7 +88,7 @@ export async function decideRoute(request: RouteRequest): Promise<RouteDecision>
 - One component per file, named export, filename matches component.
 - Co-locate in `app/components/`.
 - Hooks in `lib/hooks/`, prefixed `use`.
-- No CSS-in-JS. The design system in [font-theme.md](font-theme.md) is authoritative — use `var(--of-line)` for every border, never `2px solid black`.
+- No CSS-in-JS. Colors and surfaces come from `frontend/app/globals.css` (`--color-accent`, `--color-border`, etc.) — never hardcode a hex value. [font-theme.md](font-theme.md) is authoritative for typography only.
 - Loading, empty, and error states are required for every async surface. A component that renders only its happy path is incomplete.
 
 ## API
