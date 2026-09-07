@@ -1,0 +1,29 @@
+type Payment @entity(immutable: false) {
+  id: ID!                      # sourceChainId-txHash-logIndex
+  payer: Bytes!
+  recipient: Bytes!
+  amount: BigInt!
+  sourceChainId: BigInt!
+  destChainId: BigInt!
+  sourceTxHash: Bytes!
+  requestedAt: BigInt!
+  release: Release
+}
+
+type Release @entity(immutable: true) {
+  id: ID!
+  recipient: Bytes!
+  payout: BigInt!
+  fee: BigInt!
+  sourceRef: Bytes!
+  destChainId: BigInt!
+  destTxHash: Bytes!
+  releasedAt: BigInt!
+}
+
+type ChainStats @entity(immutable: false) {
+  id: ID!                      # chainId
+  totalVolume: BigInt!
+  totalFees: BigInt!
+  paymentCount: BigInt!
+}

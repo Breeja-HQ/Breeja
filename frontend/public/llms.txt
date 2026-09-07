@@ -1,0 +1,262 @@
+# Breeja
+
+> Cross-chain USDC settlement rail. A payer signs a gasless EIP-3009 permit on any supported chain; the relayer submits it and pays all gas; a pre-funded pool (or CCTP) releases to any named recipient on the destination chain. Routing between fast-pool and CCTP is deterministic — no LLM selects a route, computes a fee, or authorizes a release.
+
+Callers: humans via the web app, or agents via `@breeja/sdk`, `@breeja/mcp`, or an x402 flow. All four use the same relayer and the same rules.
+
+## Install
+
+```bash
+npm install @breeja/sdk
+```
+
+## One-call payment
+
+```ts
+import { Breeja } from "@breeja/sdk";
+
+const breeja = new Breeja({ apiKey: process.env.BREEJA_API_KEY! });
+
+const payment = await breeja.pay({
+  from: "base-sepolia",
+  to: "arbitrum-sepolia",
+  amount: "10.00",
+  recipient: "0xAbC0000000000000000000000000000000dEaD",
+  signer: { type: "private-key", key: process.env.PAYER_PRIVATE_KEY as `0x${string}` },
+});
+
+console.log(payment.id, payment.status, payment.destExplorerUrl);
+```
+
+`pay` internally: quotes routes, selects one, builds the EIP-3009 typed data (reading the source token's live EIP-712 domain name — never hardcode "USDC", some deployments use "USD Coin"), requests a signature from `signer`, posts to the relayer, and returns once accepted.
+
+## Chains (this deployment)
+
+Every source chain is also a destination except Ethereum Sepolia (source-only). Chain slugs are stable across environments; prefer them over numeric chain IDs.
+
+| Slug | Chain ID | Source | Destination | USDC | SourceVault | DestPool |
+|---|---|---|---|---|---|---|
+| `ethereum-sepolia` | 11155111 | yes | no | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` | `0xcD0dC65c8d64A5D135180bFCA530398f4F2b2424` | — |
+| `base-sepolia` | 84532 | yes | yes | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | `0x552431953dd3F087557196A383c436ddAab665ab` | `0x45944B08fea203a7469C82A690F68fabF85B8283` |
+| `arbitrum-sepolia` | 421614 | yes | yes | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` | `0x5471bab4fC78A946cDC3142d852e54cBD83C181e` | `0xaA45094129D06ab48AEf1e8251071067FC4FED5A` |
+| `optimism-sepolia` | 11155420 | yes | yes | `0x5fd84259d66Cd46123540766Be93DFE6D43130D7` | `0x2d18B34880cc67DA1358f8963906492e0d01a567` | `0xA5dd225Beb2Ec0009Fe143eb0B9309Ba07d23737` |
+
+Fetch this list at runtime instead of hardcoding it: `GET /chains` returns the same data plus live pool liquidity. Never assume a fixed chain list — new chains appear without an SDK upgrade.
+
+USDC is 6 decimals on every chain above. Full deploy record: `docs/DEPLOYMENTS.md`.
+
+## Routes
+
+Two candidate routes per `(fromChain, toChain, amount)`, scored deterministically:
+
+| Route | Latency | Cost | Custody | Viable when |
+|---|---|---|---|---|
+| `fast_pool` | ~10s | 0.5% fee | custodial | destination pool balance ≥ payout, pool not paused |
+| `cctp` | ~15-20min | gas only (0-13 bps) | trust-minimized | both chains CCTP-enabled (all four above are) |
+
+Default policy (no `preference` given): `fast_pool` below 1,000 USDC, `cctp` at or above it. Caller override: `preference: "fast" | "cheap" | "trustless"`.
+
+## SDK: `@breeja/sdk`
+
+```ts
+class Breeja {
+  constructor(config: { apiKey: string; baseUrl?: string });
+
+  quote(request: QuoteRequest): Promise<Quote>;
+  pay(request: PayRequest): Promise<Payment>;
+  status(paymentId: string): Promise<Payment>;
+  watch(paymentId: string, onUpdate: (p: Payment) => void): () => void;
+  history(filter: HistoryFilter): Promise<Payment[]>; // not yet backed — throws until a history endpoint ships
+  chains(): Promise<ChainInfo[]>;
+}
+```
+
+```ts
+type ChainRef =
+  | "base-sepolia" | "arbitrum-sepolia" | "optimism-sepolia"
+  | "hedera-testnet" | "arc-testnet" | "ethereum-sepolia"
+  | number;
+
+type Amount = string; // decimal string in token units, e.g. "10.00" — never a JS number
+
+type Signer =
+  | { type: "viem"; account: Account }
+  | { type: "private-key"; key: `0x${string}` }
+  | { type: "custom"; signTypedData: (data: TypedData) => Promise<`0x${string}`> };
+
+interface QuoteRequest {
+  from: ChainRef;
+  to: ChainRef;
+  amount: Amount;
+  payer?: `0x${string}`;
+  recipient?: `0x${string}`;
+  preference?: "fast" | "cheap" | "trustless";
+}
+
+interface Quote {
+  viable: boolean;
+  routes: Route[];        // best-first under preference
+  recommended: Route | null; // routes[0] when viable
+}
+
+interface Route {
+  type: "fast_pool" | "cctp";
+  viable: boolean;
+  reason?: string;
+  custody: "custodial" | "trust-minimized";
+  feeBps: number;
+  feeAmount: Amount;
+  payoutAmount: Amount;
+  estimatedSeconds: number;
+}
+
+interface PayRequest {
+  from: ChainRef;
+  to: ChainRef;
+  amount: Amount;
+  recipient: `0x${string}`;
+  signer: Signer;
+  preference?: "fast" | "cheap" | "trustless";
+}
+
+interface Payment {
+  id: string;
+  status: "pending_deposit" | "deposit_confirmed" | "released" | "failed";
+  fromChainId: number;
+  toChainId: number;
+  payer: `0x${string}`;
+  recipient: `0x${string}`;
+  amount: Amount;
+  feeAmount: Amount;
+  payoutAmount: Amount;
+  route: "fast_pool" | "cctp";
+  sourceTxHash: `0x${string}` | null;
+  destTxHash: `0x${string}` | null;
+  explanation: string | null;
+  error: string | null;
+  sourceExplorerUrl: string | null;
+  destExplorerUrl: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface ChainInfo {
+  chainId: number;
+  slug: string;
+  name: string;
+  isSource: boolean;
+  isDestination: boolean;
+  poolLiquidity: Amount | null;
+}
+
+class BreejaError extends Error {
+  code:
+    | "UnsupportedChain" | "InsufficientLiquidity" | "PoolPaused"
+    | "InvalidAmount" | "InvalidRecipient" | "PermitExpired"
+    | "PermitRejected" | "RelayerUnavailable" | "PaymentFailed";
+  details?: unknown;
+}
+```
+
+`pay` is idempotent on the EIP-3009 nonce: calling it twice with the same signed permit returns the same payment id and never double-releases. Retrying on network failure is the expected case.
+
+## Quoting before paying
+
+```ts
+const quote = await breeja.quote({ from: "base-sepolia", to: "arbitrum-sepolia", amount: "500.00" });
+for (const route of quote.routes) {
+  console.log(route.type, route.feeAmount, route.estimatedSeconds, route.viable);
+}
+const payment = await breeja.pay({ ...quote.recommended, recipient, signer });
+```
+
+## Watching a payment
+
+```ts
+const stop = breeja.watch(payment.id, (update) => {
+  if (update.status === "released") {
+    console.log("settled", update.destTxHash);
+    stop();
+  }
+});
+```
+
+`watch` polls under the hood today (no SSE endpoint yet); the public contract is push-style and will not change when the transport does.
+
+## Relayer HTTP API (what the SDK calls — call it directly only if not using the SDK)
+
+Every mutating and quoting call requires header `x-api-key: <key>`.
+
+```
+POST /quote
+  body: { fromChainId, toChainId, payer, recipient, amount, preference? }
+  200: { viable, routes: Route[], recommended: Route | null }
+  422: { error: "NoViableRoute", quote }
+
+POST /pay
+  body: { fromChainId, toChainId, payer, recipient, amount, preference?,
+          authorization: { validAfter, validBefore, nonce, v, r, s } }
+  202: { id, decision }
+  400: { error: "<validation message>" }
+  422: { error: "<PascalCase reason>", decision }
+
+GET /status/:id
+  200: Payment row (state field, not status; amounts as raw smallest-unit strings)
+  404: { error }
+
+GET /chains
+  200: { chains: ChainInfo[] }
+```
+
+Rejection reasons map to `BreejaErrorCode` as: `UnsupportedSourceChain`/`UnsupportedDestChain` → `UnsupportedChain`; `InsufficientLiquidity` → same; `PoolPaused` → same; `ZeroAmount` → `InvalidAmount`; `ZeroRecipient` → `InvalidRecipient`; anything else → `PaymentFailed`.
+
+## MCP server: `@breeja/mcp`
+
+```json
+{
+  "mcpServers": {
+    "breeja": {
+      "command": "npx",
+      "args": ["-y", "@breeja/mcp"],
+      "env": {
+        "BREEJA_API_KEY": "…",
+        "BREEJA_SIGNER_KEY": "…",
+        "BREEJA_MAX_PAYMENT_USDC": "50",
+        "BREEJA_MAX_SESSION_USDC": "200"
+      }
+    }
+  }
+}
+```
+
+| Tool | Purpose | Mutating |
+|---|---|---|
+| `breeja_quote` | Ranked routes for a payment | no |
+| `breeja_pay` | Execute a cross-chain payment — moves real funds | **yes** |
+| `breeja_status` | State of one payment | no |
+| `breeja_history` | Past payments for an address (not yet backed) | no |
+| `breeja_chains` | Supported chains and liquidity | no |
+
+`breeja_pay` states plainly in its description that it moves real funds, returns explorer URLs, and enforces both a per-call and a per-session cumulative spend cap read from `BREEJA_MAX_PAYMENT_USDC` / `BREEJA_MAX_SESSION_USDC`. Read-only tools are annotated `readOnlyHint: true` so a host can auto-approve them without auto-approving spending.
+
+## x402
+
+`POST /pay` sits behind an x402 flow: an agent requests a paid resource, gets `402` with payment details, settles through `@breeja/sdk`, retries with the payment id as proof. The resource server verifies via `breeja.status(paymentId)` that the payment is `released`, paid to the server's own address, and meets the price — never trusts the id alone. Cross-chain is the point: the agent can hold funds on one chain while the resource server is paid on another, and neither side ever holds a gas token. Full runnable demo: `examples/x402/`.
+
+## Agent identity
+
+Recipients may be ENS names, resolved in code against the registry — never treat model output as an address.
+
+## What is and isn't true
+
+Accurate: routing is deterministic and genuinely chooses between two routes; the same rail serves a browser and a headless agent; an LLM only parses intent and explains a completed decision, validated against the decision object before display.
+
+Not true, do not claim: an LLM chooses a route, computes a fee, or authorizes a release; Breeja holds custody of agent funds outside of the fast-pool route's explicitly custodial design; release is decentralized (it is not — see `docs/ARCHITECTURE.md`'s Trust model).
+
+## Further reading
+
+- `docs/ARCHITECTURE.md` — full system design, lifecycle, trust model
+- `docs/SDK.md` — SDK design constraints and docs-site requirements
+- `docs/AI_LAYER.md` — the deterministic/LLM boundary, MCP and x402 specs in full
+- `docs/CHAINS.md` — chain matrix, EIP-3009 verification results, per-chain gotchas
+- `docs/DEPLOYMENTS.md` — live contract addresses and round-trip verification records

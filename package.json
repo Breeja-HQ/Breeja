@@ -1,0 +1,10 @@
+{
+  "name": "breeja",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "relayer",
+    "packages/*",
+    "examples/*"
+  ]
+}

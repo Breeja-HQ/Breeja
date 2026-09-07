@@ -1,244 +1,200 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createPublicClient, defineChain, formatUnits, http, type Abi } from "viem";
-import { sepolia } from "viem/chains";
-import Nav from "../components/Nav";
-import Footer from "../components/Footer";
-import sourceVaultAbiJson from "@/lib/abi/SourceVault.json";
-import destPoolAbiJson from "@/lib/abi/DestPool.json";
+import { formatUnits } from "viem";
+import { explorerTxUrl } from "@breeja/sdk";
+import { getChainById } from "@/lib/chains";
 
-const sourceVaultAbi = sourceVaultAbiJson as Abi;
-const destPoolAbi = destPoolAbiJson as Abi;
+const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
-const hskTestnet = defineChain({
-  id: 133,
-  name: "HSK Testnet",
-  nativeCurrency: { name: "HSK", symbol: "HSK", decimals: 18 },
-  rpcUrls: {
-    default: { http: [process.env.NEXT_PUBLIC_HSK_RPC_URL ?? "https://testnet.hsk.xyz"] },
-  },
-});
+const HISTORY_QUERY = `
+  query DashboardHistory {
+    payments(first: 50, orderBy: requestedAt, orderDirection: desc) {
+      id
+      payer
+      recipient
+      amount
+      sourceChainId
+      destChainId
+      sourceTxHash
+      requestedAt
+      release {
+        payout
+        fee
+        destTxHash
+        releasedAt
+      }
+    }
+  }
+`;
 
-const sepoliaClient = createPublicClient({
-  chain: sepolia,
-  transport: http(process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL),
-});
-
-const hskClient = createPublicClient({
-  chain: hskTestnet,
-  transport: http(process.env.NEXT_PUBLIC_HSK_RPC_URL),
-});
-
-const sourceVaultAddress = process.env.NEXT_PUBLIC_SOURCE_VAULT_ADDRESS as `0x${string}`;
-const destPoolAddress = process.env.NEXT_PUBLIC_DEST_POOL_ADDRESS as `0x${string}`;
-
-const sepoliaExplorer = (hash: string) => `https://sepolia.etherscan.io/tx/${hash}`;
-const hskExplorer = (hash: string) => `https://testnet-explorer.hsk.xyz/tx/${hash}`;
-
-function truncateAddress(address: string) {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+interface ReleaseEntry {
+  payout: string;
+  fee: string;
+  destTxHash: string;
+  releasedAt: string;
 }
 
-type ReleasedEvent = {
-  transactionHash: string;
-  amount: bigint;
-  fee: bigint;
-  sourceRef: string;
-};
-
-type BridgeRow = {
-  transactionHash: string;
+interface PaymentEntry {
+  id: string;
   payer: string;
   recipient: string;
-  amount: bigint;
-  release: ReleasedEvent | null;
-};
+  amount: string;
+  sourceChainId: string;
+  destChainId: string;
+  sourceTxHash: string;
+  requestedAt: string;
+  release: ReleaseEntry | null;
+}
+
+interface SubgraphHistoryResponse {
+  data?: { payments: PaymentEntry[] };
+}
+
+type LoadState = "loading" | "ready" | "error" | "unconfigured";
+
+function formatUsdc(smallestUnits: string): string {
+  return formatUnits(BigInt(smallestUnits), 6);
+}
+
+function truncateAddress(address: string): string {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+function chainName(chainId: string): string {
+  return getChainById(Number(chainId))?.name ?? `Chain ${chainId}`;
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="flex flex-col gap-3">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="h-20 rounded-xl border border-border bg-badge-bg/40 animate-pulse" />
+      ))}
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="rounded-2xl border border-border p-12 text-center">
+      <p className="text-ink font-medium mb-2">No payments yet.</p>
+      <p className="text-body text-sm">
+        Once a payment settles on any chain, it will show up here — indexed straight from on-chain events.
+      </p>
+    </div>
+  );
+}
+
+function UnconfiguredState() {
+  return (
+    <div className="rounded-2xl border border-border p-12 text-center">
+      <p className="text-ink font-medium mb-2">Dashboard not connected.</p>
+      <p className="text-body text-sm">
+        Set <span className="font-mono">NEXT_PUBLIC_SUBGRAPH_URL</span> to a deployed Breeja subgraph to see payment
+        history here.
+      </p>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
-  const [rows, setRows] = useState<BridgeRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<LoadState>(SUBGRAPH_URL ? "loading" : "unconfigured");
+  const [payments, setPayments] = useState<PaymentEntry[]>([]);
 
   useEffect(() => {
+    if (!SUBGRAPH_URL) return;
+
     let cancelled = false;
 
-    async function loadHistory() {
+    async function load() {
       try {
-        const [paymentRequestedLogs, releasedLogs] = await Promise.all([
-          sepoliaClient.getContractEvents({
-            address: sourceVaultAddress,
-            abi: sourceVaultAbi,
-            eventName: "PaymentRequested",
-            fromBlock: "earliest",
-            toBlock: "latest",
-          }),
-          hskClient.getContractEvents({
-            address: destPoolAddress,
-            abi: destPoolAbi,
-            eventName: "Released",
-            fromBlock: "earliest",
-            toBlock: "latest",
-          }),
-        ]);
-
-        const releasesBySourceRef = new Map<string, ReleasedEvent>();
-        for (const log of releasedLogs) {
-          const args = log.args as { amount: bigint; fee: bigint; sourceRef: string };
-          releasesBySourceRef.set(args.sourceRef.toLowerCase(), {
-            transactionHash: log.transactionHash,
-            amount: args.amount,
-            fee: args.fee,
-            sourceRef: args.sourceRef,
-          });
-        }
-
-        const history: BridgeRow[] = paymentRequestedLogs.map((log) => {
-          const args = log.args as { payer: string; recipient: string; amount: bigint };
-          return {
-            transactionHash: log.transactionHash,
-            payer: args.payer,
-            recipient: args.recipient,
-            amount: args.amount,
-            release: releasesBySourceRef.get(log.transactionHash.toLowerCase()) ?? null,
-          };
+        const response = await fetch(SUBGRAPH_URL as string, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: HISTORY_QUERY }),
         });
-
-        history.reverse();
-
-        if (!cancelled) {
-          setRows(history);
+        const body = (await response.json()) as SubgraphHistoryResponse;
+        if (cancelled) return;
+        if (!response.ok || !body.data) {
+          setState("error");
+          return;
         }
+        setPayments(body.data.payments);
+        setState("ready");
       } catch {
-        if (!cancelled) {
-          setError("Couldn't load bridge history from chain. The RPC may be unavailable — try again shortly.");
-        }
+        if (!cancelled) setState("error");
       }
     }
 
-    loadHistory();
-
+    void load();
     return () => {
       cancelled = true;
     };
   }, []);
 
   return (
-    <div className="flex flex-col flex-1 bg-surface">
-      <Nav />
-      <main className="flex flex-col flex-1">
-        <section className="max-w-7xl w-full mx-auto px-6 md:px-8 py-12">
-          <h1 className="font-sans font-bold text-4xl tracking-tight text-ink">
-            Bridge History
-          </h1>
-          <p className="mt-2 text-lg text-body">
-            Every deposit and release, read straight from Sepolia and HSK testnet — no database.
-          </p>
+    <main className="w-full min-h-screen bg-white">
+      <div className="max-w-4xl mx-auto px-6 py-16">
+        <h1 className="font-sans font-bold text-3xl text-ink mb-2">Dashboard</h1>
+        <p className="text-body mb-8">Payment history indexed from on-chain events across every chain.</p>
 
-          <div className="mt-8">
-            {error && (
-              <p className="text-red-600 text-sm">{error}</p>
-            )}
-
-            {!error && rows === null && (
-              <p className="text-body text-sm">Loading history...</p>
-            )}
-
-            {!error && rows !== null && rows.length === 0 && (
-              <p className="text-body text-sm">No bridge activity yet.</p>
-            )}
-
-            {!error && rows !== null && rows.length > 0 && (
-              <div className="overflow-x-auto rounded-2xl border border-border">
-                <table className="w-full text-base">
-                  <thead>
-                    <tr className="border-b border-border text-left text-body">
-                      <th className="px-4 py-3 font-medium">Payer</th>
-                      <th className="px-4 py-3 font-medium">Recipient</th>
-                      <th className="px-4 py-3 font-medium">Type</th>
-                      <th className="px-4 py-3 font-medium">Amount</th>
-                      <th className="px-4 py-3 font-medium">Status</th>
-                      <th className="px-4 py-3 font-medium">Sepolia</th>
-                      <th className="px-4 py-3 font-medium">HSK</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => {
-                      const isSelfBridge =
-                        row.payer.toLowerCase() === row.recipient.toLowerCase();
-
-                      return (
-                        <tr
-                          key={row.transactionHash}
-                          className="border-b border-border last:border-b-0"
-                        >
-                          <td className="px-4 py-3 font-mono text-ink">
-                            {truncateAddress(row.payer)}
-                          </td>
-                          <td className="px-4 py-3 font-mono text-ink">
-                            {truncateAddress(row.recipient)}
-                          </td>
-                          <td className="px-4 py-3">
-                            {isSelfBridge ? (
-                              <span className="inline-flex items-center rounded-full bg-badge-bg text-body px-3 py-1 text-xs font-medium">
-                                Self-bridge
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center rounded-full bg-accent text-white px-3 py-1 text-xs font-semibold">
-                                Third-party payment
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-ink">
-                            {formatUnits(row.amount, 6)} USDC
-                          </td>
-                          <td className="px-4 py-3">
-                            {row.release ? (
-                              <span className="text-ink">
-                                Released
-                                <span className="text-body">
-                                  {" "}
-                                  (fee {formatUnits(row.release.fee, 6)} USDC)
-                                </span>
-                              </span>
-                            ) : (
-                              <span className="text-body">Pending</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <a
-                              href={sepoliaExplorer(row.transactionHash)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-accent hover:underline"
-                            >
-                              View
-                            </a>
-                          </td>
-                          <td className="px-4 py-3">
-                            {row.release ? (
-                              <a
-                                href={hskExplorer(row.release.transactionHash)}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-accent hover:underline"
-                              >
-                                View
-                              </a>
-                            ) : (
-                              <span className="text-body">-</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+        {state === "unconfigured" && <UnconfiguredState />}
+        {state === "loading" && <DashboardSkeleton />}
+        {state === "error" && (
+          <div className="rounded-2xl border border-border bg-badge-bg p-8 text-center">
+            <p className="text-ink font-medium">Could not reach the subgraph.</p>
           </div>
-        </section>
-      </main>
-      <Footer />
-    </div>
+        )}
+        {state === "ready" && payments.length === 0 && <EmptyState />}
+
+        {state === "ready" && payments.length > 0 && (
+          <div className="flex flex-col gap-3">
+            {payments.map((payment) => {
+              const sourceUrl = explorerTxUrl(Number(payment.sourceChainId), payment.sourceTxHash);
+              const destUrl = payment.release
+                ? explorerTxUrl(Number(payment.destChainId), payment.release.destTxHash)
+                : null;
+              return (
+                <div key={payment.id} className="rounded-xl border border-border p-5 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-ink">
+                      {chainName(payment.sourceChainId)} → {chainName(payment.destChainId)}
+                    </span>
+                    <span
+                      className={`text-xs font-medium rounded-full px-3 py-1 ${
+                        payment.release ? "bg-badge-bg text-accent" : "bg-border text-body"
+                      }`}
+                    >
+                      {payment.release ? "Released" : "In flight"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-body">Amount</span>
+                    <span className="text-ink font-medium">{formatUsdc(payment.amount)} USDC</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-body">Recipient</span>
+                    <span className="text-ink font-mono text-xs">{truncateAddress(payment.recipient)}</span>
+                  </div>
+                  <div className="flex gap-4 text-sm pt-1">
+                    {sourceUrl && (
+                      <a href={sourceUrl} target="_blank" rel="noreferrer" className="text-accent font-medium hover:underline">
+                        Source tx
+                      </a>
+                    )}
+                    {destUrl && (
+                      <a href={destUrl} target="_blank" rel="noreferrer" className="text-accent font-medium hover:underline">
+                        Destination tx
+                      </a>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </main>
   );
 }

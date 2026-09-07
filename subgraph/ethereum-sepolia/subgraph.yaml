@@ -1,0 +1,27 @@
+specVersion: 1.3.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: SourceVault
+    network: sepolia
+    source:
+      address: "0xcD0dC65c8d64A5D135180bFCA530398f4F2b2424"
+      abi: SourceVault
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Payment
+        - ChainStats
+      abis:
+        - name: SourceVault
+          file: ./abis/SourceVault.json
+      eventHandlers:
+        - event: PaymentRequested(indexed address,indexed address,uint256,uint256,uint256)
+          handler: handlePaymentRequested
+      file: ./src/mapping.ts
