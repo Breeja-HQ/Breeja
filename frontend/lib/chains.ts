@@ -1,7 +1,12 @@
-import { arbitrumSepolia, baseSepolia, optimismSepolia, sepolia } from "viem/chains";
+import { arbitrumSepolia, arcTestnet, baseSepolia, optimismSepolia, sepolia } from "viem/chains";
 import type { Chain } from "viem";
 
-export type ChainSlug = "base-sepolia" | "arbitrum-sepolia" | "optimism-sepolia" | "ethereum-sepolia";
+export type ChainSlug =
+  | "base-sepolia"
+  | "arbitrum-sepolia"
+  | "optimism-sepolia"
+  | "ethereum-sepolia"
+  | "arc-testnet";
 
 export interface ChainConfig {
   slug: ChainSlug;
@@ -61,6 +66,17 @@ export const CHAINS: readonly ChainConfig[] = [
     destPoolAddress: "0xA5dd225Beb2Ec0009Fe143eb0B9309Ba07d23737",
     usdcAddress: "0x5fd84259d66Cd46123540766Be93DFE6D43130D7",
     explorerTxUrl: (hash) => `https://sepolia-optimism.etherscan.io/tx/${hash}`,
+  },
+  {
+    slug: "arc-testnet",
+    chainId: 5_042_002,
+    name: "Arc Testnet",
+    viemChain: arcTestnet,
+    isDestination: true,
+    sourceVaultAddress: "0xfd2f67cD354545712f9d8230170015d7e30d133A",
+    destPoolAddress: "0xA5dd225Beb2Ec0009Fe143eb0B9309Ba07d23737",
+    usdcAddress: "0x3600000000000000000000000000000000000000",
+    explorerTxUrl: (hash) => `https://testnet.arcscan.app/tx/${hash}`,
   },
 ];
 

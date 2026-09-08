@@ -6,6 +6,7 @@ import messageTransmitterV2Abi from "../abi/MessageTransmitterV2.json" with { ty
 import { requireEnv } from "../env.js";
 import {
   ARBITRUM_SEPOLIA_CHAIN_ID,
+  ARC_TESTNET_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
   ETHEREUM_SEPOLIA_CHAIN_ID,
   OPTIMISM_SEPOLIA_CHAIN_ID,
@@ -17,11 +18,15 @@ export {
   listSourceChainIds,
   listDestinationChainIds,
   listRoutePairs,
+  getArcStatus,
   ETHEREUM_SEPOLIA_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
   ARBITRUM_SEPOLIA_CHAIN_ID,
   OPTIMISM_SEPOLIA_CHAIN_ID,
+  ARC_TESTNET_CHAIN_ID,
 } from "./chainIds.js";
+
+const ENABLE_ARC = process.env.ENABLE_ARC === "true";
 
 type SourceVaultContract = GetContractReturnType<
   typeof sourceVaultAbi,
@@ -89,11 +94,15 @@ let cachedEntries: Map<number, ChainEntry> | null = null;
 async function loadEntries(): Promise<Map<number, ChainEntry>> {
   if (cachedEntries) return cachedEntries;
 
-  const [sepolia, baseSepolia, arbitrumSepolia, optimismSepolia] = await Promise.all([
+  const [sepolia, baseSepolia, arbitrumSepolia, optimismSepolia, arcTestnet] = await Promise.all([
     import("./sepolia.js"),
     import("./baseSepolia.js"),
     import("./arbitrumSepolia.js"),
     import("./optimismSepolia.js"),
+    // Imported unconditionally so the module graph stays static, but its
+    // requireEnv calls only run — and only matter — when ENABLE_ARC is set;
+    // see the ENABLE_ARC guard below before this entry is added to the map.
+    ENABLE_ARC ? import("./arcTestnet.js") : Promise.resolve(null),
   ]);
 
   const entries = new Map<number, ChainEntry>();
@@ -145,6 +154,22 @@ async function loadEntries(): Promise<Map<number, ChainEntry>> {
     ...buildCctpContracts(optimismSepolia.optimismSepoliaPublicClient, optimismSepolia.optimismSepoliaWalletClient),
     getGasPrice: optimismSepolia.getOptimismSepoliaGasPrice,
   });
+
+  // Additive, non-blocking: Arc is only registered when ENABLE_ARC is set.
+  // The existing four chains above are unaffected either way.
+  if (ENABLE_ARC && arcTestnet) {
+    entries.set(ARC_TESTNET_CHAIN_ID, {
+      chainId: ARC_TESTNET_CHAIN_ID,
+      chain: arcTestnet.arcTestnetChain,
+      publicClient: arcTestnet.arcTestnetPublicClient,
+      walletClient: arcTestnet.arcTestnetWalletClient,
+      sourceVaultContract: arcTestnet.sourceVaultContract as unknown as SourceVaultContract,
+      destPoolContract: arcTestnet.destPoolContract as unknown as DestPoolContract,
+      usdcContract: arcTestnet.arcTestnetUsdcContract as unknown as Erc20Contract,
+      ...buildCctpContracts(arcTestnet.arcTestnetPublicClient, arcTestnet.arcTestnetWalletClient),
+      getGasPrice: arcTestnet.getArcTestnetGasPrice,
+    });
+  }
 
   cachedEntries = entries;
   return entries;

@@ -11,9 +11,9 @@ Every chain below is both a source and a destination unless noted. This is the d
 | Arbitrum Sepolia | 421614 | Source + dest | Circle USDC | Yes | Yes | Fast finality |
 | Optimism Sepolia | 11155420 | Source + dest | Circle USDC | Yes | Yes | Same stack as Base |
 | Hedera Testnet | 296 | Source + dest | USDC (HTS) | **Verify** | No | Not EVM-identical — see below |
-| Arc Testnet | TBD | Source + dest | USDC native | **Verify** | Native | Circle's own chain; confirm IDs at build time |
+| Arc Testnet | 5042002 | Source + dest | USDC native | Yes | Native (domain 26) | Circle's own chain; additive, behind `ENABLE_ARC` |
 
-Chain IDs for Arc are left as TBD deliberately. Confirm them against Circle's live docs before writing them into config — do not guess, and do not let a model fill them in.
+Arc's chain ID, RPC, and contract addresses were confirmed live on 2026-09-08 against `docs.arc.io` (fetched and cross-checked byte-for-byte against the raw page source) and independently corroborated by viem's built-in `arcTestnet` chain definition and by `cast chain-id` against the RPC returning the same id on-chain. See "Arc" below for the full record.
 
 ## Verify before you build
 
@@ -35,6 +35,7 @@ Verified for the Base/Arbitrum/Optimism Sepolia mesh build — both calls return
 | Base Sepolia | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | `0x71f17a3b2ff373b803d70a5a07c046c1a2bc8e89c09ef722fcb047abe94c981` | `false` | `USDC` | `2` |
 | Arbitrum Sepolia | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` | `0x85944e1292d007732838d6eadfa67589b78ffcededbd4df60488d0af251308b` | `false` | `USD Coin` | `2` |
 | Optimism Sepolia | `0x5fd84259d66Cd46123540766Be93DFE6D43130D7` | `0x09d038a3e46040fc37eb01174dbbcdb7981fbd8eafd9e1a857b1c67805dfb29` | `false` | `USDC` | `2` |
+| Arc Testnet | `0x3600000000000000000000000000000000000000` | `0x361191522483d32a83e70ae7183b4b9629442c13a78bc9921d6f707911c8c6b0` | `false` | `USDC` | `2` |
 
 Gotcha caught here: Arbitrum Sepolia's USDC has EIP-712 domain `name = "USD Coin"`, not `"USDC"` like the other two. A signer that hardcodes `"USDC"` as the domain name produces a signature that fails to verify on Arbitrum. Read `name()` on-chain per token rather than assuming it matches the symbol.
 
@@ -51,7 +52,39 @@ Build Hedera **last**, behind a feature flag, after the EVM mesh works end to en
 
 ## Arc
 
-Circle's chain, and the strategic center of the Circle track. USDC is native rather than bridged, and CCTP support is first-class. Treat its chain ID, RPC, and contract addresses as unknowns to be confirmed from Circle's documentation during the build, not from memory.
+Circle's chain, and the strategic center of the Circle track. USDC is native rather than bridged, and CCTP support is first-class.
+
+Public testnet launched October 28, 2025 (mainnet targeted September 16, 2026, per Circle's public communications — not relevant to this testnet integration). Verified live on 2026-09-08:
+
+| Field | Value | Source |
+|---|---|---|
+| Chain ID | `5042002` | `docs.arc.io/arc/references/rpc-endpoints`; confirmed on-chain via `cast chain-id --rpc-url https://rpc.testnet.arc.io`; matches viem's built-in `arcTestnet` export |
+| RPC (primary) | `https://rpc.testnet.arc.io` (also `rpc.testnet.arc.network`, both resolve to the same chain) | docs.arc.io; live-tested |
+| Block explorer | `https://testnet.arcscan.app` | docs.arc.io; live-tested via its API |
+| Native gas token | USDC, 18 decimals | docs.arc.io "Stablecoin native model" |
+| USDC (ERC-20 interface) | `0x3600000000000000000000000000000000000000`, 6 decimals | docs.arc.io/arc/references/contract-addresses |
+| CCTP domain | `26` | docs.arc.io/arc/references/contract-addresses |
+| TokenMessengerV2 | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` | docs.arc.io/arc/references/contract-addresses |
+| MessageTransmitterV2 | `0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275` | docs.arc.io/arc/references/contract-addresses |
+| TokenMinterV2 | `0xb43db544E2c27092c107639Ad201b3dEfAbcF192` | docs.arc.io/arc/references/contract-addresses |
+| MessageV2 | `0xbaC0179bB358A8936169a63408C8481D582390C4` | docs.arc.io/arc/references/contract-addresses |
+| Faucet | `https://faucet.circle.com` | docs.arc.io |
+
+Note: `TokenMessengerV2`/`MessageTransmitterV2` on Arc use the same addresses as this project's existing `CCTP_TOKEN_MESSENGER_ADDRESS`/`CCTP_MESSAGE_TRANSMITTER_ADDRESS` (Circle deploys CCTP V2 deterministically at the same address across chains), which independently corroborates these values against what was already verified for the Sepolia mesh.
+
+Arc's USDC is architecturally different from the other chains: it's the native gas asset (an `OptimismMintableERC20`-style situation does NOT apply here — this is Circle's own `FiatTokenProxy`/`NativeFiatTokenV2_2`, verified on ArcScan as a verified contract), with an "optional" ERC-20 interface at the fixed address above sharing the same underlying balance. EIP-3009 was verified live rather than assumed:
+
+```
+$ cast call 0x3600000000000000000000000000000000000000 "DOMAIN_SEPARATOR()(bytes32)" --rpc-url https://rpc.testnet.arc.io
+0x361191522483d32a83e70ae7183b4b9629442c13a78bc9921d6f707911c8c6b0
+$ cast call 0x3600000000000000000000000000000000000000 "authorizationState(address,bytes32)(bool)" 0x0 0x0 --rpc-url https://rpc.testnet.arc.io
+false
+$ # name() -> "USDC", symbol() -> "USDC", decimals() -> 6, version() -> "2"
+```
+
+Both calls returned cleanly — full EIP-3009 support, same gasless permit flow as every other chain, no special-casing needed in the signer.
+
+Arc is additive and gated behind `ENABLE_ARC=true` (relayer env var) — the existing four-chain mesh's behavior, routing, and UI paths are unaffected when it's unset (the default in `.env.example`). See [DEPLOYMENTS.md](DEPLOYMENTS.md) for deployed contract addresses and the live round-trip record.
 
 ## Frontend chain switching
 

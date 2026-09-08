@@ -2,6 +2,15 @@ export const ETHEREUM_SEPOLIA_CHAIN_ID = 11155111;
 export const BASE_SEPOLIA_CHAIN_ID = 84532;
 export const ARBITRUM_SEPOLIA_CHAIN_ID = 421614;
 export const OPTIMISM_SEPOLIA_CHAIN_ID = 11155420;
+// Verified live on 2026-09-08 against docs.arc.io and `cast chain-id` against
+// https://rpc.testnet.arc.io. SourceVault/DestPool deployed the same day —
+// see docs/DEPLOYMENTS.md. Gated behind ENABLE_ARC so the existing 4-chain
+// mesh's behavior is unaffected when Arc is off (the default).
+export const ARC_TESTNET_CHAIN_ID = 5_042_002;
+// CCTP V2 domain for Arc, per docs.arc.io/arc/references/contract-addresses.
+export const ARC_TESTNET_CCTP_DOMAIN = 26;
+
+const ENABLE_ARC = process.env.ENABLE_ARC === "true";
 
 interface ChainRole {
   chainId: number;
@@ -18,6 +27,20 @@ const CHAIN_ROLES: readonly ChainRole[] = [
   { chainId: BASE_SEPOLIA_CHAIN_ID, slug: "base-sepolia", name: "Base Sepolia", isDestination: true, cctpDomain: 6 },
   { chainId: ARBITRUM_SEPOLIA_CHAIN_ID, slug: "arbitrum-sepolia", name: "Arbitrum Sepolia", isDestination: true, cctpDomain: 3 },
   { chainId: OPTIMISM_SEPOLIA_CHAIN_ID, slug: "optimism-sepolia", name: "Optimism Sepolia", isDestination: true, cctpDomain: 2 },
+  // Arc is additive and off by default. Set ENABLE_ARC=true (and the
+  // ARC_TESTNET_* env vars) to include it — the existing four chains behave
+  // identically either way. See docs/CHAINS.md "Arc" and docs/DEPLOYMENTS.md.
+  ...(ENABLE_ARC
+    ? [
+        {
+          chainId: ARC_TESTNET_CHAIN_ID,
+          slug: "arc-testnet",
+          name: "Arc Testnet",
+          isDestination: true,
+          cctpDomain: ARC_TESTNET_CCTP_DOMAIN,
+        },
+      ]
+    : []),
 ];
 
 const CHAIN_ROLE_BY_SLUG = new Map<string, ChainRole>(CHAIN_ROLES.map((role) => [role.slug, role]));
@@ -74,6 +97,11 @@ export function listChainInfo(): ChainInfo[] {
 
 export function isCctpEnabled(chainId: number): boolean {
   return CHAIN_ROLE_BY_ID.has(chainId);
+}
+
+/** Arc readiness, for status endpoints/logs. */
+export function getArcStatus(): { flagEnabled: boolean; chainId: number; live: boolean } {
+  return { flagEnabled: ENABLE_ARC, chainId: ARC_TESTNET_CHAIN_ID, live: ENABLE_ARC };
 }
 
 export function getCctpDomain(chainId: number): number {

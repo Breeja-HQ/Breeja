@@ -16,6 +16,7 @@ ethereum_sepolia = "${ETHEREUM_SEPOLIA_RPC_URL}"
 base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
 arbitrum_sepolia = "${ARBITRUM_SEPOLIA_RPC_URL}"
 optimism_sepolia = "${OPTIMISM_SEPOLIA_RPC_URL}"
+hedera_testnet = "${HEDERA_TESTNET_RPC_URL}"
 mainnet = "${MAINNET_RPC_URL}"
 mainnet_dest = "${MAINNET_DEST_RPC_URL}"
 

@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { privateKeyToAccount } from "viem/accounts";
 import { createPublicClient, createWalletClient, http, parseSignature, toHex, parseUnits, formatUnits, type Chain } from "viem";
-import { baseSepolia, arbitrumSepolia, optimismSepolia, sepolia } from "viem/chains";
+import { baseSepolia, arbitrumSepolia, optimismSepolia, sepolia, arcTestnet } from "viem/chains";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -58,6 +58,15 @@ const CHAINS: Record<string, ChainConfig> = {
     sourceVaultAddressEnv: "OPTIMISM_SEPOLIA_SOURCE_VAULT_ADDRESS",
     destPoolAddressEnv: "OPTIMISM_SEPOLIA_DEST_POOL_ADDRESS",
     explorerTxUrl: (hash) => `https://sepolia-optimism.etherscan.io/tx/${hash}`,
+  },
+  "arc-testnet": {
+    chainId: 5_042_002,
+    viemChain: arcTestnet,
+    rpcUrlEnv: "ARC_TESTNET_RPC_URL",
+    usdcAddressEnv: "ARC_TESTNET_USDC_ADDRESS",
+    sourceVaultAddressEnv: "ARC_TESTNET_SOURCE_VAULT_ADDRESS",
+    destPoolAddressEnv: "ARC_TESTNET_DEST_POOL_ADDRESS",
+    explorerTxUrl: (hash) => `https://testnet.arcscan.app/tx/${hash}`,
   },
 };
 

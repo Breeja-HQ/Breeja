@@ -83,3 +83,38 @@ Confirmed. Amount 1 USDC, fee 0.005 USDC, payout 0.995 USDC, pending → deposit
 - Dest release: `0xf92d150720058e293e7e6f2ccda2979765f59a8e01ab756c51d0650e9a257d90` ([Basescan](https://sepolia.basescan.org/tx/0xf92d150720058e293e7e6f2ccda2979765f59a8e01ab756c51d0650e9a257d90))
 
 Both directions used real EIP-3009 signatures — including Arbitrum Sepolia's USDC, whose EIP-712 domain name is `"USD Coin"` rather than `"USDC"` (see [CHAINS.md](CHAINS.md)) — a real relayer-paid deposit, and a real relayer-paid release, recipient distinct from payer.
+
+## Arc Testnet (additive, `ENABLE_ARC`)
+
+Deployed 2026-09-08 using the funded deployer key already present in this repo's `contracts/.env`/`relayer/.env` (`0x9bcf302cFCB64406b557342c2715e85Ac62A4693` — the same address used as deployer/relayer/owner for the four-chain mesh above, confirmed funded with testnet USDC on Arc before deploying). Additive only — gated behind `ENABLE_ARC=true`; the four chains above are unaffected when it is unset.
+
+| Chain | Chain ID | SourceVault | DestPool | USDC (Circle, native) |
+|---|---|---|---|---|
+| Arc Testnet | 5042002 | `0xfd2f67cD354545712f9d8230170015d7e30d133A` | `0xA5dd225Beb2Ec0009Fe143eb0B9309Ba07d23737` | `0x3600000000000000000000000000000000000000` |
+
+Deploy transactions:
+
+- SourceVault: `0xbaec4ec7d3fe780c92042417d21945bfa58481638887b61033a93508f4b34bde`
+- DestPool: `0xe887ff0941b6cfc7e6fd4b73404e9811578157c87abfabafbdb361b52c978b58`
+- DestPool funded with 5 USDC: `0x22dbcd8ca3c5986f79998acea174e643e1065f22eca27737a5754f91462122b1`
+
+All checkable on [ArcScan Testnet](https://testnet.arcscan.app).
+
+USDC EIP-3009 support verified on-chain (see [CHAINS.md](CHAINS.md) "Arc" section for the full `cast` output). Fee: 50 bps, matching the rest of the mesh.
+
+### Arc Testnet -> Base Sepolia (fast pool, live round trip)
+
+Confirmed. Amount 1 USDC, fee 0.005 USDC, payout 0.995 USDC, pending_deposit -> deposit_confirmed -> released in ~80s (Arc's block time is slower than the Sepolia rollups; ~77s of that was waiting for the source deposit to confirm).
+
+- Source deposit (Arc Testnet): `0xf3095e650665448beb66a0fd41846618054b5f8e3fbe816a61b257437ab1d43d` ([ArcScan](https://testnet.arcscan.app/tx/0xf3095e650665448beb66a0fd41846618054b5f8e3fbe816a61b257437ab1d43d))
+- Dest release (Base Sepolia): `0x2ac8b8062762a82ceb2941a4e605866886f82cf73cd36b1726c629a4e339167b` ([Basescan](https://sepolia.basescan.org/tx/0x2ac8b8062762a82ceb2941a4e605866886f82cf73cd36b1726c629a4e339167b))
+
+A real EIP-3009 `TransferWithAuthorization` signed on Arc (EIP-712 domain name `"USDC"`, version `"2"`), a real relayer-paid deposit into Arc's `SourceVault`, and a real relayer-paid release on Base Sepolia — recipient distinct from payer, run via `relayer/scripts/test-round-trip.ts` against a locally running relayer with `ENABLE_ARC=true`.
+
+CCTP burn/mint through Arc's native route (TokenMessengerV2/MessageTransmitterV2, domain 26) is wired in `relayer/src/chains/registry.ts` the same way as the other four chains but was not separately live-tested end-to-end in this pass — the fast-pool round trip above already exercises the full deposit/release path with real signatures and real funds on Arc specifically.
+
+### Not yet done for Arc
+
+- CCTP burn/mint live test specifically through Arc (wired, not yet run end-to-end).
+- Subgraph manifest entry for Arc's contracts (step 8 of the "Adding a chain" checklist).
+- A destination round trip *into* Arc (only Arc-as-source was tested above).
