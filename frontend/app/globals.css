@@ -29,3 +29,61 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Soft, fast entrance used when the /pay widget moves between states.
+   Deliberately low-amplitude: a short fade with a few pixels of rise, so a
+   state change reads as a transition rather than a snap. */
+@keyframes breeja-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.breeja-enter {
+  animation: breeja-fade-in 220ms ease-out both;
+}
+
+/* Non-negotiable: no transforms or animation when the viewer has asked for
+   reduced motion. Everything still renders, it just arrives instantly. */
+@media (prefers-reduced-motion: reduce) {
+  .breeja-enter {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .motion-lift:hover,
+  .motion-lift:active {
+    transform: none !important;
+  }
+}
+
+/* Shared interaction feel for buttons and selectable cards. */
+.motion-lift {
+  transition:
+    transform 180ms ease-out,
+    box-shadow 180ms ease-out,
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    opacity 180ms ease-out;
+}
+
+.motion-lift:hover {
+  transform: translateY(-1px);
+}
+
+.motion-lift:active {
+  transform: translateY(0.5px);
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ArrowRight } from "lucide-react";
 import { formatUnits } from "viem";
 import { explorerTxUrl } from "@breeja/sdk";
 import { getChainById } from "@/lib/chains";
@@ -75,7 +76,7 @@ function EmptyState() {
     <div className="rounded-2xl border border-border p-12 text-center">
       <p className="text-ink font-medium mb-2">No payments yet.</p>
       <p className="text-body text-sm">
-        Once a payment settles on any chain, it will show up here — indexed straight from on-chain events.
+        Once a payment settles on any chain, it will show up here, indexed straight from on-chain events.
       </p>
     </div>
   );
@@ -151,8 +152,10 @@ export default function DashboardPage() {
               return (
                 <div key={payment.id} className="rounded-xl border border-border p-5 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-ink">
-                      {chainName(payment.sourceChainId)} → {chainName(payment.destChainId)}
+                    <span className="flex items-center gap-2 font-medium text-ink">
+                      {chainName(payment.sourceChainId)}
+                      <ArrowRight className="h-4 w-4 shrink-0 text-body" aria-hidden="true" />
+                      {chainName(payment.destChainId)}
                     </span>
                     <span
                       className={`text-xs font-medium rounded-full px-3 py-1 ${

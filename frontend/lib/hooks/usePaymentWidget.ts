@@ -70,7 +70,10 @@ export function usePaymentWidget() {
 
   const [state, setState] = useState<WidgetState>("idle");
   const [sourceSlug, setSourceSlug] = useState<ChainConfig["slug"]>("base-sepolia");
-  const [destSlug, setDestSlug] = useState<ChainConfig["slug"]>("arbitrum-sepolia");
+  // Base Sepolia to Arc Testnet is the default pair: both are full-mesh
+  // (isDestination: true in lib/chains.ts) and both have EIP-3009 USDC, so the
+  // default landing state is a route that can actually be signed gaslessly.
+  const [destSlug, setDestSlug] = useState<ChainConfig["slug"]>("arc-testnet");
   const [amount, setAmount] = useState("");
   const [recipientInput, setRecipientInput] = useState("");
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
@@ -187,7 +190,7 @@ export function usePaymentWidget() {
     // relayer, and docs/DEPLOYMENTS.md "Hedera" for its live run record.
     if (!sourceChain.supportsEip3009) {
       setError(
-        `${sourceChain.name} does not support gasless signing. Paying from ${sourceChain.name} requires an on-chain approve() transaction that this widget does not yet send — see docs/CHAINS.md "Hedera".`,
+        `${sourceChain.name} cannot be paid from gaslessly. Its USDC does not implement EIP-3009, so there is no off-chain permit to sign here. Paying from ${sourceChain.name} needs an on-chain approve() that you submit and pay gas for yourself, and this widget does not send that transaction yet. Pick a different source chain to continue.`,
       );
       setState("ready_to_sign");
       return;

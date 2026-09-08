@@ -8,8 +8,8 @@ export default function Nav() {
     <nav className="sticky top-0 z-50 w-full bg-white/90 backdrop-blur border-b border-border">
       <div className="max-w-7xl mx-auto px-6 md:px-8 py-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
-          <BreejaLogo className="w-9 h-9 shrink-0" />
-          <span className="font-sans font-bold text-xl tracking-tight text-ink">
+          <BreejaLogo className="w-11 h-11 shrink-0" />
+          <span className="font-sans font-bold text-2xl tracking-tight text-ink">
             Breeja
           </span>
         </Link>

@@ -14,6 +14,12 @@ contract DestPool is Ownable, Pausable, ReentrancyGuard {
     address public relayer;
     uint256 public immutable feeBps;
 
+    /// Source references already released, so the same deposit can never be
+    /// paid out twice. The relayer retries a failed release (see the
+    /// reconciler), and a retry after a lost receipt would otherwise double
+    /// pay: the guard belongs here rather than only in application code.
+    mapping(bytes32 => bool) public releasedSourceRefs;
+
     event Released(address indexed recipient, uint256 amount, uint256 fee, bytes32 sourceRef);
 
     error NotRelayer();
@@ -23,6 +29,7 @@ contract DestPool is Ownable, Pausable, ReentrancyGuard {
     error ZeroRecipient();
     error ZeroAmount();
     error FeeTooHigh();
+    error AlreadyReleased();
 
     constructor(address token_, address relayer_, address owner_, uint256 feeBps_) Ownable(owner_) {
         if (token_ == address(0) || relayer_ == address(0) || owner_ == address(0)) revert ZeroAddress();
@@ -37,6 +44,12 @@ contract DestPool is Ownable, Pausable, ReentrancyGuard {
         if (paused()) revert ContractPaused();
         if (recipient == address(0)) revert ZeroRecipient();
         if (amount == 0) revert ZeroAmount();
+        if (releasedSourceRefs[sourceRef]) revert AlreadyReleased();
+
+        // Mark before transferring: the state write must land even if the
+        // token callback re-enters, so a replay cannot slip through.
+        releasedSourceRefs[sourceRef] = true;
+
         uint256 fee = (amount * feeBps) / 10_000;
         uint256 payout = amount - fee;
         if (token.balanceOf(address(this)) < payout) revert InsufficientLiquidity();

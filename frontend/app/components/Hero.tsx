@@ -4,12 +4,7 @@ export default function Hero() {
   return (
     <section className="w-full bg-white py-20 md:py-28">
       <div className="max-w-7xl mx-auto px-6 flex flex-col items-center text-center">
-        <span className="inline-flex items-center gap-2 bg-badge-bg text-accent rounded-full px-5 py-2 text-lg font-medium">
-          <span className="w-2 h-2 rounded-full bg-accent" />
-          Live on Testnet
-        </span>
-
-        <h1 className="mt-6 font-sans font-semibold tracking-tight text-ink text-6xl md:text-7xl lg:text-8xl max-w-5xl">
+        <h1 className="font-sans font-semibold tracking-tight text-ink text-6xl md:text-7xl lg:text-8xl max-w-5xl">
           Move stablecoins across chains, gaslessly, in seconds.
         </h1>
 

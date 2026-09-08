@@ -93,15 +93,19 @@ async function reconcileDepositConfirmed(
   if (action.type === "retry_release") {
     releaseAttemptsByPaymentId.set(payment.id, attempts + 1);
     try {
+      // Gross amount, not payoutAmount: DestPool.release deducts the fee
+      // itself, so passing the already-net payout here would charge the fee
+      // twice and short the recipient. Must stay identical to the in-process
+      // release in api/routes.ts.
       const { txHash } = await submitFastPoolRelease(
         payment.toChainId,
         payment.recipient,
-        BigInt(payment.payoutAmount),
+        BigInt(payment.amount),
         payment.sourceTxHash,
       );
       const explanation = await explainRouteDecision(paymentDecisionForExplanation(payment), {
-      destChainName: getChainName(payment.toChainId),
-    });
+        destChainName: getChainName(payment.toChainId),
+      });
       await markReleased(payment.id, txHash, explanation);
       releaseAttemptsByPaymentId.delete(payment.id);
     } catch {

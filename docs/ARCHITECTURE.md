@@ -111,13 +111,16 @@ See [AI_LAYER.md](AI_LAYER.md).
 
 The fast-pool route is **custodial**. The relayer controls `DestPool` liquidity and decides when to release. A user on that route trusts the relayer's key and solvency, not a trustless message protocol. Same tradeoff as early Across and Hop. This is the reason the route is fast.
 
-Mitigations present in v2:
+Mitigations actually deployed in v2:
 
-- CCTP offered as an alternative route for the same payment.
-- `DestPool` owner is a Safe multisig.
-- Relayer signer is Ledger-backed; release authority is not a hot server key.
+- CCTP offered as an alternative route for the same payment, with no pool custody in the loop.
+- Release is replay-protected on-chain: `DestPool` records every `sourceRef` it has paid, so the same deposit can never be released twice, even if the relayer retries.
+- Payment state is durable and forward-only. Terminal payments are never rewritten, and the reconciler recovers anything left in flight by a restart.
 
-Not present in v2, and must be stated rather than implied: **release is not decentralized.** A bonded watcher network attesting to source deposits before release is the next real trust reduction. It is out of scope for this build.
+Not present in v2, and stated rather than implied:
+
+- **Release is not decentralized.** A bonded watcher network attesting to source deposits before release is the next real trust reduction. Out of scope for this build.
+- **The relayer key is a hot server key.** The Safe-multisig pool owner and Ledger-backed signer in the table above are the v2 *target*, not the current deployment. Today one EOA is deployer, relayer and owner on every chain (see [DEPLOYMENTS.md](DEPLOYMENTS.md)). Do not read that row as shipped.
 
 ## Failure modes
 

@@ -32,6 +32,37 @@ contract DestPoolTest is Test {
         token.mint(address(pool), LIQUIDITY);
     }
 
+    function test_RevertWhen_Release_ReplaysSameSourceRef() public {
+        uint256 amount = 100 ether;
+        bytes32 sourceRef = keccak256("src-ref-replay");
+
+        vm.prank(relayer);
+        pool.release(recipient, amount, sourceRef);
+
+        uint256 balanceAfterFirst = token.balanceOf(recipient);
+
+        // A retry after a lost receipt, or a malicious repeat, must not pay twice.
+        vm.prank(relayer);
+        vm.expectRevert(DestPool.AlreadyReleased.selector);
+        pool.release(recipient, amount, sourceRef);
+
+        assertEq(token.balanceOf(recipient), balanceAfterFirst);
+        assertTrue(pool.releasedSourceRefs(sourceRef));
+    }
+
+    function test_Release_AllowsDistinctSourceRefs() public {
+        uint256 amount = 10 ether;
+        uint256 payout = amount - (amount * FEE_BPS) / 10_000;
+
+        vm.prank(relayer);
+        pool.release(recipient, amount, keccak256("src-ref-a"));
+        vm.prank(relayer);
+        pool.release(recipient, amount, keccak256("src-ref-b"));
+
+        assertEq(token.balanceOf(recipient), payout * 2);
+    }
+
+
     function test_Release_HappyPath_WithFee() public {
         uint256 amount = 100 ether;
         uint256 fee = (amount * FEE_BPS) / 10_000;

@@ -24,8 +24,8 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
           <div className="flex flex-col gap-3">
             <Link href="/" className="flex items-center gap-2">
-              <BreejaLogo className="w-9 h-9 shrink-0" />
-              <span className="font-sans font-bold text-xl tracking-tight text-ink">
+              <BreejaLogo className="w-11 h-11 shrink-0" />
+              <span className="font-sans font-bold text-2xl tracking-tight text-ink">
                 Breeja
               </span>
             </Link>
@@ -54,19 +54,31 @@ export default function Footer() {
             </div>
 
             <div className="flex items-center gap-4 text-body">
-              <Link href="#" aria-label="GitHub" className="hover:text-accent transition-colors">
+              <a
+                href="https://github.com/Breeja-HQ/Breeja"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="GitHub"
+                className="hover:text-accent transition-colors"
+              >
                 <GithubIcon className="h-5 w-5" />
-              </Link>
-              <Link href="#" aria-label="X (Twitter)" className="hover:text-accent transition-colors">
+              </a>
+              <a
+                href="https://x.com/usebreeja"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="X (Twitter)"
+                className="hover:text-accent transition-colors"
+              >
                 <XIcon className="h-5 w-5" />
-              </Link>
+              </a>
             </div>
           </div>
         </div>
 
         <div className="border-t border-border mt-8 pt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-base text-body">
           <p>&copy; 2026 Breeja. Testnet demo.</p>
-          <p>Ethereum, Base, Arbitrum &amp; Optimism Sepolia</p>
+          <p>Base, Arbitrum, Optimism, Arc, Hedera &amp; Ethereum Sepolia</p>
         </div>
       </div>
     </footer>
