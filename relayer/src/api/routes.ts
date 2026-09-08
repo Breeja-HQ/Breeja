@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { decideRoute, quoteRoutes, type RouteDecision } from "../agent/router.js";
 import { explainRouteDecision } from "../agent/explain.js";
@@ -158,14 +158,21 @@ export function createApiRouter(): Router {
         return;
       }
 
-      if (!payload.authorization) {
-        res.status(400).json({ error: "authorization is required" });
-        return;
-      }
+      // validatePayRequest already enforced that authorization is present
+      // for every chain that supports EIP-3009, and absent is fine for a
+      // chain that doesn't (Hedera) — the payer approved the vault on-chain
+      // themselves instead, and runDepositAndRelease below picks the
+      // deposit()-fallback path when authorization is missing. There's no
+      // EIP-3009 nonce to dedup on in that case, so a fresh random one is
+      // generated here purely as a DB idempotency key — it has no on-chain
+      // meaning and is never sent to the contract.
+      const nonce = payload.authorization
+        ? (payload.authorization.nonce as `0x${string}`)
+        : (`0x${randomBytes(32).toString("hex")}` as `0x${string}`);
 
       const { payment, isNew } = await createPayment({
         id: randomUUID(),
-        nonce: payload.authorization.nonce as `0x${string}`,
+        nonce,
         fromChainId: payload.fromChainId,
         toChainId: payload.toChainId,
         payer: payload.payer as `0x${string}`,

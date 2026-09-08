@@ -6,6 +6,7 @@ import {
   type ChainState,
 } from "./routeViability.js";
 import { getCctpFeeQuote } from "../routes/cctp.js";
+import { isCctpEnabled } from "../chains/chainIds.js";
 import { scoreRoutes, type RoutePreference, type ScoredRoute } from "./scorer.js";
 import {
   getDestPoolContract,
@@ -110,6 +111,22 @@ async function buildCctpCandidate(request: PaymentRequest) {
   const rejection = checkRequestRejection(request);
   if (rejection) {
     return { route: "cctp" as const, viable: false, reason: rejection.reason, feeBps: 0, feeAmount: 0n, payoutAmount: 0n };
+  }
+
+  // Hedera has no CCTP route (confirmed, see docs/CHAINS.md) — cctpDomain is
+  // null for it in chainIds.ts, so isCctpEnabled is false on either side of
+  // a Hedera-involved payment. Short-circuit here rather than letting
+  // getCctpDomain throw inside getCctpFeeQuote, so this reads as an
+  // intentional "no route" rather than an error.
+  if (!isCctpEnabled(request.fromChainId) || !isCctpEnabled(request.toChainId)) {
+    return {
+      route: "cctp" as const,
+      viable: false,
+      reason: "CctpNotSupportedOnChain",
+      feeBps: 0,
+      feeAmount: 0n,
+      payoutAmount: 0n,
+    };
   }
 
   try {

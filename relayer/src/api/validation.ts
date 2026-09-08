@@ -1,5 +1,5 @@
 import { isAddress } from "viem";
-import { isSupportedDestinationChain, isSupportedSourceChain } from "../chains/chainIds.js";
+import { isSupportedDestinationChain, isSupportedSourceChain, supportsEip3009 } from "../chains/chainIds.js";
 import type { RoutePreference } from "../agent/scorer.js";
 
 export interface PaymentAuthorization {
@@ -66,6 +66,12 @@ export function validatePayRequest(body: Partial<PayRequestBody>): string | null
     ) {
       return "authorization is malformed";
     }
+  } else if (supportsEip3009(body.fromChainId)) {
+    // Only chains without EIP-3009 support (Hedera) may omit authorization —
+    // their deposit path is approve() (payer, on-chain) + deposit() (relayer,
+    // pulled via transferFrom), not a signed permit. Every other chain still
+    // requires a signed authorization; this branch is not a general opt-out.
+    return "authorization is required";
   }
   if (body.preference !== undefined && !ROUTE_PREFERENCES.includes(body.preference)) {
     return `preference must be one of: ${ROUTE_PREFERENCES.join(", ")}`;

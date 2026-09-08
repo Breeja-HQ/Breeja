@@ -118,3 +118,48 @@ CCTP burn/mint through Arc's native route (TokenMessengerV2/MessageTransmitterV2
 - CCTP burn/mint live test specifically through Arc (wired, not yet run end-to-end).
 - Subgraph manifest entry for Arc's contracts (step 8 of the "Adding a chain" checklist).
 - A destination round trip *into* Arc (only Arc-as-source was tested above).
+
+## Hedera Testnet (additive, `ENABLE_HEDERA`)
+
+Deployed 2026-09-08 using the funded payer/relayer key already present in this repo's `contracts/.env`/`relayer/.env` (`0x08c3657C368975D6175cfF6a5c084a1E5F7E7609`, funded with testnet HBAR and testnet USDC before deploying). Additive only — gated behind `ENABLE_HEDERA=true`; the chains above are unaffected when it is unset.
+
+| Chain | Chain ID | SourceVault | DestPool | USDC (HTS) |
+|---|---|---|---|---|
+| Hedera Testnet | 296 | `0xfd80365F46C776eE7c08642F700E268e69247228` | `0xD2B5A9a82B91a60eb7AD28770a5453546746b8f6` | `0x0000000000000000000000000000000000068cda` |
+
+USDC on Hedera is Hedera Token Service token `0.0.429274` accessed through its EVM/ERC-20 facade at the address above (6 decimals). EIP-3009 support verified on-chain — **not supported**, see [CHAINS.md](CHAINS.md) "Hedera" for the full `cast` output. Fee: 50 bps, matching the rest of the mesh.
+
+Deploy and setup transactions, all checkable on [HashScan Testnet](https://hashscan.io/testnet) or via the [mirror node REST API](https://testnet.mirrornode.hedera.com/api/v1/docs/):
+
+- SourceVault deploy: `0x4e7025a50240cd319969055faebcc3a825c02e7f1d882d36e750b4e3d66689d1` ([HashScan](https://hashscan.io/testnet/transaction/0x4e7025a50240cd319969055faebcc3a825c02e7f1d882d36e750b4e3d66689d1))
+- SourceVault `associateToken()`: `0x4418c8d2eb73de25420ecb68802ebdd6de4c67ed9def7bcd03c70a1f73f7f632` ([HashScan](https://hashscan.io/testnet/transaction/0x4418c8d2eb73de25420ecb68802ebdd6de4c67ed9def7bcd03c70a1f73f7f632))
+- DestPool deploy: `0xd9d9ae74906478e2e7b540bf6508d79bfe2928facc266fe7c6a470d004bc291c` ([HashScan](https://hashscan.io/testnet/transaction/0xd9d9ae74906478e2e7b540bf6508d79bfe2928facc266fe7c6a470d004bc291c))
+- DestPool `associateToken()`: `0x284a9a91d8f23c966087fc3fba62831cfea87a8801e9363f8ed370cc5920f8f4` ([HashScan](https://hashscan.io/testnet/transaction/0x284a9a91d8f23c966087fc3fba62831cfea87a8801e9363f8ed370cc5920f8f4))
+- DestPool funded with 5 USDC: transaction id `0.0.7314364-1788864066-359941875` (a native HTS token transfer via the Hedera SDK, so it carries a 48-byte Hedera-native transaction hash rather than a standard 32-byte EVM `0x` hash — findable on HashScan by transaction ID, or via the mirror node at `/api/v1/transactions?account.id=0.0.10420222`)
+
+Both contracts were also created with `max_automatic_token_associations: -1` (unlimited auto-association), confirmed via the mirror node — the explicit `associateToken()` calls above were a belt-and-suspenders step, not strictly load-bearing, but confirm the contract-level HTS association question either way.
+
+### Hedera Testnet -> Optimism Sepolia (fast pool, live round trip)
+
+Confirmed. Amount 1 USDC, fee 0.005 USDC, payout 0.995 USDC, pending_deposit -> deposit_confirmed -> released in ~16s.
+
+Since Hedera's USDC does not support EIP-3009, this used the real `approve()` + `deposit()` flow, not a signed permit:
+
+1. Payer called `USDC.approve(sourceVault, 1000000)` on Hedera directly (on-chain, payer-paid HBAR gas): `0x171fd7abc1f294f4630f313702029df93df941febefa7c2ac07baa04af42d832` ([HashScan](https://hashscan.io/testnet/transaction/0x171fd7abc1f294f4630f313702029df93df941febefa7c2ac07baa04af42d832))
+2. `POST /pay` to a locally running relayer (`ENABLE_HEDERA=true`) with `fromChainId: 296`, `toChainId: 11155420`, and no `authorization` field — accepted, decided `fast_pool` (no CCTP route offered for Hedera, confirming the router restriction), fee 50 bps.
+3. Relayer called `SourceVault.deposit(payer, recipient, amount, destChainId)` on Hedera (relayer-paid HBAR gas, pulls via `transferFrom`):
+   - Source deposit (Hedera Testnet): `0x0e0b512b2c23d3de0ac1a41cde340570b0f0f73f6eff6570dcff34f76400b855` ([HashScan](https://hashscan.io/testnet/transaction/0x0e0b512b2c23d3de0ac1a41cde340570b0f0f73f6eff6570dcff34f76400b855))
+4. Relayer released from Optimism Sepolia's `DestPool` (relayer-paid gas):
+   - Dest release (Optimism Sepolia): `0xad406535409b5b6d6833d890ff1a50b7558f300f203a937b9ad6ea3c22a729fa` ([Etherscan](https://sepolia-optimism.etherscan.io/tx/0xad406535409b5b6d6833d890ff1a50b7558f300f203a937b9ad6ea3c22a729fa))
+
+Recipient's USDC balance on Optimism Sepolia confirmed at 0.995 USDC directly on-chain after release (read via `balanceOf`, recipient distinct from payer). Hedera's `SourceVault` balance confirmed at 1 USDC after the deposit.
+
+This is a real on-chain `approve()` paid by the payer, a real relayer-paid `deposit()` pulling funds via `transferFrom`, and a real relayer-paid fast-pool release on a separate chain — run against a locally running relayer with `ENABLE_HEDERA=true`, `BREEJA_TEST_API_KEY`/`BREEJA_API_KEYS=local-dev-key`, hitting `/pay` and `/status/:id` directly (not through `test-round-trip.ts`, which only builds EIP-3009 signatures and has no Hedera case — see "Not yet done for Hedera" below).
+
+### Not yet done for Hedera
+
+- `relayer/scripts/test-round-trip.ts` has no Hedera case: it only builds EIP-3009 `TransferWithAuthorization` signatures, which Hedera cannot use. The live round trip above was run by calling `/pay` and `/status/:id` directly rather than through that script. A dedicated `approve()` + `/pay`-without-authorization script for Hedera would be a reasonable follow-up if repeated testing is needed.
+- The frontend payment widget (`usePaymentWidget.ts`) does not send a real `approve()` transaction for Hedera as a source chain — it detects `supportsEip3009: false` and fails with an explanatory error rather than attempting (and silently breaking) an EIP-3009 signature flow. Wiring a real `useWriteContract` approve step for non-EIP-3009 chains is a documented follow-up, not done in this pass.
+- A destination round trip *into* Hedera (only Hedera-as-source was tested above) — Hedera's `DestPool` fast-pool release path (`release()`) is the same contract code as every other chain's `DestPool` and was not separately exercised as a destination in this pass, though its USDC balance (5 USDC) and association are both confirmed live.
+- CCTP is confirmed unsupported for Hedera (no domain, no test needed — this isn't a gap, it's the correct behavior per docs/CHAINS.md).
+- Subgraph manifest entry for Hedera's contracts (step 8 of the "Adding a chain" checklist).

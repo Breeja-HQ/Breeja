@@ -10,7 +10,7 @@ Every chain below is both a source and a destination unless noted. This is the d
 | Base Sepolia | 84532 | Source + dest | Circle USDC | Yes | Yes | Primary demo chain, cheapest gas |
 | Arbitrum Sepolia | 421614 | Source + dest | Circle USDC | Yes | Yes | Fast finality |
 | Optimism Sepolia | 11155420 | Source + dest | Circle USDC | Yes | Yes | Same stack as Base |
-| Hedera Testnet | 296 | Source + dest | USDC (HTS) | **Verify** | No | Not EVM-identical — see below |
+| Hedera Testnet | 296 | Source + dest | USDC (HTS) | **No** | No | Not EVM-identical — see below |
 | Arc Testnet | 5042002 | Source + dest | USDC native | Yes | Native (domain 26) | Circle's own chain; additive, behind `ENABLE_ARC` |
 
 Arc's chain ID, RPC, and contract addresses were confirmed live on 2026-09-08 against `docs.arc.io` (fetched and cross-checked byte-for-byte against the raw page source) and independently corroborated by viem's built-in `arcTestnet` chain definition and by `cast chain-id` against the RPC returning the same id on-chain. See "Arc" below for the full record.
@@ -43,12 +43,37 @@ Gotcha caught here: Arbitrum Sepolia's USDC has EIP-712 domain `name = "USD Coin
 
 Hedera is the highest-effort chain here and the decision to include it should stay deliberate.
 
-- It exposes a JSON-RPC relay, so viem works, but it is not EVM-identical.
+- It exposes a JSON-RPC relay (Hashio), so viem works, but it is not EVM-identical.
 - USDC is an **HTS token**, not a plain ERC-20. It may need explicit association before an account can receive it, which has no Ethereum analogue and will surface as a confusing revert if missed.
 - Gas is denominated in HBAR with different price mechanics; the router's gas estimation needs a Hedera-specific path rather than a generic `getGasPrice`.
 - No CCTP. Fast pool is the only route in and out.
 
 Build Hedera **last**, behind a feature flag, after the EVM mesh works end to end. If it slips, the product still demos completely without it.
+
+Verified live on 2026-09-08 via `cast` against `https://testnet.hashio.io/api`:
+
+```
+$ cast chain-id --rpc-url https://testnet.hashio.io/api
+296
+$ cast call 0x0000000000000000000000000000000000068cda "DOMAIN_SEPARATOR()(bytes32)" --rpc-url https://testnet.hashio.io/api
+Error: server returned an error response: error code -32008: Contract revert executed (empty data)
+$ cast call 0x0000000000000000000000000000000000068cda "authorizationState(address,bytes32)(bool)" 0x0 0x0 --rpc-url https://testnet.hashio.io/api
+Error: server returned an error response: error code -32008: Contract revert executed (empty data)
+```
+
+**EIP-3009 is confirmed unsupported.** Both calls revert against the real USDC HTS token at `0x0000000000000000000000000000000000068cda` (Hedera token `0.0.429274`). This is not a guess based on Hedera's general reputation for non-standard tokens — it was checked directly against the deployed token, per the "Verify before you build" rule above. `depositWithAuthorization` (the gasless signed-permit deposit path used by every other chain in this mesh) is therefore unusable here.
+
+**Deposit flow on Hedera is `approve()` + `deposit()`, not a signature.** The payer calls `USDC.approve(sourceVault, amount)` themselves, on-chain, paying their own HBAR gas. The relayer then calls `SourceVault.deposit(payer, recipient, amount, destChainId)`, which is relayer-gated and pulls funds via `transferFrom`. This is the same `deposit()` fallback function that already existed in `SourceVault.sol` for every chain (previously unused, since the other four chains never needed anything but the EIP-3009 path) — see `HederaSourceVault.sol` in `contracts/src/hedera/`, which inherits it unmodified.
+
+**This is NOT gasless for the payer on Hedera**, unlike every EIP-3009 chain in this mesh where the permit is signed off-chain for free and the relayer pays all on-chain gas. The payer pays HBAR gas for their own `approve()` call. `relayer/src/api/validation.ts`'s `supportsEip3009` check enforces this at the API boundary: a `/pay` request from a chain with `supportsEip3009: false` (Hedera) is accepted *without* an `authorization` field, where every other chain requires one.
+
+**HTS token association is required at the contract level**, separate from any user account association. `HederaSourceVault` and `HederaDestPool` (in `contracts/src/hedera/`) each add an `associateToken()` function that calls the HTS system contract precompile at `0x167` — without it, a transfer into either contract reverts with no useful ERC-20-shaped error. In this deploy both contracts were also created with `max_automatic_token_associations: -1` (unlimited auto-association), confirmed via the mirror node, so the explicit `associateToken()` call was a belt-and-suspenders step rather than strictly load-bearing — but it's cheap, idempotent, and removes any doubt. See [DEPLOYMENTS.md](DEPLOYMENTS.md) "Hedera Testnet" for the real association tx hashes.
+
+Gas price mechanics: `eth_gasPrice` via Hashio works mechanically but reflects Hedera's fixed USD-denominated fee schedule converted to HBAR/tinybar, not an EIP-1559-style competitive gas market — `getHederaTestnetGasPrice()` in `relayer/src/chains/hederaTestnet.ts` calls it the same way as every other chain for interface consistency, but the number should not be read as a congestion signal.
+
+Hedera is additive and gated behind `ENABLE_HEDERA=true` (relayer env var) — the existing mesh's behavior is unaffected when it's unset (the default in `.env.example`). Restricted to fast pool only: `HEDERA_TESTNET_CHAIN_ID`'s `cctpDomain` is `null` in `relayer/src/chains/chainIds.ts`, so `isCctpEnabled()` is false on either side of a Hedera-involved payment and `router.ts`'s `buildCctpCandidate` short-circuits to a non-viable CCTP candidate before ever calling `getCctpDomain`. See [DEPLOYMENTS.md](DEPLOYMENTS.md) for deployed contract addresses and the live round-trip record.
+
+**Frontend caveat**: `frontend/lib/chains.ts` carries a `supportsEip3009: false` flag for Hedera and `usePaymentWidget.ts`'s `submitPayment` checks it and fails with an explanatory error rather than attempting to build an EIP-3009 signature that cannot work on this chain. Sending an actual `approve()` transaction from the browser (a `useWriteContract` call, not `useSignTypedData`) is not wired into the widget in this pass — Hedera is listed as a chain and its "not gasless" behavior is honestly surfaced, but paying *from* Hedera through the UI is not yet a working end-to-end flow. The relayer-side API and contracts are live and were exercised directly (see DEPLOYMENTS.md), just not through the browser widget.
 
 ## Arc
 

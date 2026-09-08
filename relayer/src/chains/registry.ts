@@ -9,24 +9,30 @@ import {
   ARC_TESTNET_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
   ETHEREUM_SEPOLIA_CHAIN_ID,
+  HEDERA_TESTNET_CHAIN_ID,
   OPTIMISM_SEPOLIA_CHAIN_ID,
 } from "./chainIds.js";
 
 export {
   isSupportedSourceChain,
   isSupportedDestinationChain,
+  isCctpEnabled,
+  supportsEip3009,
   listSourceChainIds,
   listDestinationChainIds,
   listRoutePairs,
   getArcStatus,
+  getHederaStatus,
   ETHEREUM_SEPOLIA_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
   ARBITRUM_SEPOLIA_CHAIN_ID,
   OPTIMISM_SEPOLIA_CHAIN_ID,
   ARC_TESTNET_CHAIN_ID,
+  HEDERA_TESTNET_CHAIN_ID,
 } from "./chainIds.js";
 
 const ENABLE_ARC = process.env.ENABLE_ARC === "true";
+const ENABLE_HEDERA = process.env.ENABLE_HEDERA === "true";
 
 type SourceVaultContract = GetContractReturnType<
   typeof sourceVaultAbi,
@@ -94,7 +100,7 @@ let cachedEntries: Map<number, ChainEntry> | null = null;
 async function loadEntries(): Promise<Map<number, ChainEntry>> {
   if (cachedEntries) return cachedEntries;
 
-  const [sepolia, baseSepolia, arbitrumSepolia, optimismSepolia, arcTestnet] = await Promise.all([
+  const [sepolia, baseSepolia, arbitrumSepolia, optimismSepolia, arcTestnet, hederaTestnet] = await Promise.all([
     import("./sepolia.js"),
     import("./baseSepolia.js"),
     import("./arbitrumSepolia.js"),
@@ -103,6 +109,8 @@ async function loadEntries(): Promise<Map<number, ChainEntry>> {
     // requireEnv calls only run — and only matter — when ENABLE_ARC is set;
     // see the ENABLE_ARC guard below before this entry is added to the map.
     ENABLE_ARC ? import("./arcTestnet.js") : Promise.resolve(null),
+    // Same pattern as Arc: only matters when ENABLE_HEDERA is set.
+    ENABLE_HEDERA ? import("./hederaTestnet.js") : Promise.resolve(null),
   ]);
 
   const entries = new Map<number, ChainEntry>();
@@ -168,6 +176,27 @@ async function loadEntries(): Promise<Map<number, ChainEntry>> {
       usdcContract: arcTestnet.arcTestnetUsdcContract as unknown as Erc20Contract,
       ...buildCctpContracts(arcTestnet.arcTestnetPublicClient, arcTestnet.arcTestnetWalletClient),
       getGasPrice: arcTestnet.getArcTestnetGasPrice,
+    });
+  }
+
+  // Additive, non-blocking: Hedera is only registered when ENABLE_HEDERA is
+  // set. The existing chains above are unaffected either way. Hedera has no
+  // CCTP support (confirmed — see docs/CHAINS.md), so isCctpEnabled() is
+  // false for it (cctpDomain: null in chainIds.ts) and router.ts never lets
+  // a Hedera-involved quote reach the CCTP contracts wired in here — they're
+  // built anyway (same global CCTP env vars as every other chain) only so
+  // this entry has the same shape as the rest; they're simply never called.
+  if (ENABLE_HEDERA && hederaTestnet) {
+    entries.set(HEDERA_TESTNET_CHAIN_ID, {
+      chainId: HEDERA_TESTNET_CHAIN_ID,
+      chain: hederaTestnet.hederaTestnetChain,
+      publicClient: hederaTestnet.hederaTestnetPublicClient,
+      walletClient: hederaTestnet.hederaTestnetWalletClient,
+      sourceVaultContract: hederaTestnet.sourceVaultContract as unknown as SourceVaultContract,
+      destPoolContract: hederaTestnet.destPoolContract as unknown as DestPoolContract,
+      usdcContract: hederaTestnet.hederaTestnetUsdcContract as unknown as Erc20Contract,
+      ...buildCctpContracts(hederaTestnet.hederaTestnetPublicClient, hederaTestnet.hederaTestnetWalletClient),
+      getGasPrice: hederaTestnet.getHederaTestnetGasPrice,
     });
   }
 

@@ -32,8 +32,26 @@ describe("isPositiveBigint", () => {
 });
 
 describe("validatePayRequest", () => {
+  // Sepolia supports EIP-3009, so a "fully valid" request for it must carry
+  // a well-formed authorization — validatePayRequest now enforces that
+  // itself (previously only routes.ts's /pay handler did).
   it("accepts a fully valid request", () => {
-    expect(validatePayRequest(VALID_BODY)).toBeNull();
+    const body: PayRequestBody = {
+      ...VALID_BODY,
+      authorization: {
+        validAfter: "0",
+        validBefore: "9999999999",
+        nonce: "0xabc",
+        v: 27,
+        r: "0xdead",
+        s: "0xbeef",
+      },
+    };
+    expect(validatePayRequest(body)).toBeNull();
+  });
+
+  it("rejects a request on an EIP-3009 chain with no authorization", () => {
+    expect(validatePayRequest(VALID_BODY)).toBe("authorization is required");
   });
 
   it("rejects a missing fromChainId", () => {

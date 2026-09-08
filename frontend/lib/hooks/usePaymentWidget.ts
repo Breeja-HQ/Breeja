@@ -171,6 +171,28 @@ export function usePaymentWidget() {
 
   const submitPayment = useCallback(async () => {
     if (!sourceChain || !destChain || !recipient || !payer || !selectedRoute || !amount) return;
+
+    // Hedera's USDC does not implement EIP-3009 (confirmed on-chain — see
+    // docs/CHAINS.md "Hedera"), so there is no off-chain permit to sign here.
+    // The relayer's /pay accepts a Hedera-sourced payment without an
+    // authorization (see relayer/src/api/validation.ts's supportsEip3009
+    // check), but only once the payer has already called approve() on
+    // Hedera's SourceVault themselves, on-chain, paying their own gas — a
+    // real wagmi useWriteContract call against USDC.approve(), not a
+    // useSignTypedData call like every other chain here. That transaction-
+    // sending path is not wired into this widget yet; failing honestly here
+    // rather than building an EIP-3009 payload that cannot work is the
+    // documented gap for this pass. See relayer/scripts/test-hedera-round-trip.ts
+    // for the real approve() + deposit() flow run standalone against the
+    // relayer, and docs/DEPLOYMENTS.md "Hedera" for its live run record.
+    if (!sourceChain.supportsEip3009) {
+      setError(
+        `${sourceChain.name} does not support gasless signing. Paying from ${sourceChain.name} requires an on-chain approve() transaction that this widget does not yet send — see docs/CHAINS.md "Hedera".`,
+      );
+      setState("ready_to_sign");
+      return;
+    }
+
     setState("submitting");
     setError(null);
 
