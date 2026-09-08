@@ -1,0 +1,85 @@
+databases:
+  - name: breeja-db
+    plan: free
+    databaseName: breeja
+    user: breeja
+
+services:
+  - type: web
+    name: breeja-relayer
+    runtime: node
+    rootDir: relayer
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run db:migrate && npm start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: breeja-db
+          property: connectionString
+      - key: PORT
+        value: 3001
+      - key: PRIVATE_KEY
+        sync: false
+      - key: ETHEREUM_SEPOLIA_RPC_URL
+        value: https://ethereum-sepolia-rpc.publicnode.com
+      - key: ETHEREUM_SEPOLIA_SOURCE_VAULT_ADDRESS
+        sync: false
+      - key: ETHEREUM_SEPOLIA_USDC_ADDRESS
+        value: 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
+      - key: BASE_SEPOLIA_RPC_URL
+        value: https://sepolia.base.org
+      - key: BASE_SEPOLIA_SOURCE_VAULT_ADDRESS
+        sync: false
+      - key: BASE_SEPOLIA_DEST_POOL_ADDRESS
+        sync: false
+      - key: BASE_SEPOLIA_USDC_ADDRESS
+        value: 0x036CbD53842c5426634e7929541eC2318f3dCF7e
+      - key: ARBITRUM_SEPOLIA_RPC_URL
+        value: https://sepolia-rollup.arbitrum.io/rpc
+      - key: ARBITRUM_SEPOLIA_SOURCE_VAULT_ADDRESS
+        sync: false
+      - key: ARBITRUM_SEPOLIA_DEST_POOL_ADDRESS
+        sync: false
+      - key: ARBITRUM_SEPOLIA_USDC_ADDRESS
+        value: 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d
+      - key: OPTIMISM_SEPOLIA_RPC_URL
+        value: https://sepolia.optimism.io
+      - key: OPTIMISM_SEPOLIA_SOURCE_VAULT_ADDRESS
+        sync: false
+      - key: OPTIMISM_SEPOLIA_DEST_POOL_ADDRESS
+        sync: false
+      - key: OPTIMISM_SEPOLIA_USDC_ADDRESS
+        value: 0x5fd84259d66Cd46123540766Be93DFE6D43130D7
+      - key: ENABLE_ARC
+        value: "true"
+      - key: ARC_TESTNET_RPC_URL
+        value: https://rpc.testnet.arc.io
+      - key: ARC_TESTNET_SOURCE_VAULT_ADDRESS
+        value: 0xfd2f67cD354545712f9d8230170015d7e30d133A
+      - key: ARC_TESTNET_DEST_POOL_ADDRESS
+        value: 0xA5dd225Beb2Ec0009Fe143eb0B9309Ba07d23737
+      - key: ARC_TESTNET_USDC_ADDRESS
+        value: 0x3600000000000000000000000000000000000000
+      - key: ENABLE_HEDERA
+        value: "true"
+      - key: HEDERA_TESTNET_RPC_URL
+        value: https://testnet.hashio.io/api
+      - key: HEDERA_TESTNET_SOURCE_VAULT_ADDRESS
+        value: 0xfd80365F46C776eE7c08642F700E268e69247228
+      - key: HEDERA_TESTNET_DEST_POOL_ADDRESS
+        value: 0xD2B5A9a82B91a60eb7AD28770a5453546746b8f6
+      - key: HEDERA_TESTNET_USDC_ADDRESS
+        value: 0x0000000000000000000000000000000000068cda
+      - key: HEDERA_TESTNET_PRIVATE_KEY
+        sync: false
+      - key: CCTP_TOKEN_MESSENGER_ADDRESS
+        value: 0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA
+      - key: CCTP_MESSAGE_TRANSMITTER_ADDRESS
+        value: 0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275
+      - key: CCTP_ATTESTATION_API_URL
+        value: https://iris-api-sandbox.circle.com
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: BREEJA_API_KEYS
+        sync: false
