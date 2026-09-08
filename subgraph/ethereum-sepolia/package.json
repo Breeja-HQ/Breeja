@@ -6,7 +6,7 @@
   "scripts": {
     "codegen": "graph codegen",
     "build": "graph build",
-    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ breeja-ethereum-sepolia"
+    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ ethereum-sepolia"
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "0.98.1",

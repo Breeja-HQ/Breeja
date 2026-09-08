@@ -1,13 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { hasSubgraphs, querySubgraphs } from "@/lib/subgraphs";
 
-const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 const POLL_INTERVAL_MS = 30_000;
 
+// chainStats_collection, not chainStats — Graph's codegen treats the
+// ChainStats entity name as already-plural and reserves the bare "chainStats"
+// field for a single-by-id lookup instead of a collection query. Verified
+// live against the deployed Studio schema.
 const STATS_QUERY = `
   query LandingStats {
-    chainStats {
+    chainStats_collection {
       id
       totalVolume
       paymentCount
@@ -19,12 +23,6 @@ interface ChainStatsEntry {
   id: string;
   totalVolume: string;
   paymentCount: string;
-}
-
-interface SubgraphStatsResponse {
-  data?: {
-    chainStats: ChainStatsEntry[];
-  };
 }
 
 interface LandingStats {
@@ -41,30 +39,26 @@ function formatUsdc(totalMicros: bigint): string {
 }
 
 async function fetchStats(): Promise<LandingStats | null> {
-  if (!SUBGRAPH_URL) return null;
+  if (!hasSubgraphs()) return null;
 
-  const response = await fetch(SUBGRAPH_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: STATS_QUERY }),
-  });
-  if (!response.ok) return null;
-
-  const body = (await response.json()) as SubgraphStatsResponse;
-  const rows = body.data?.chainStats;
-  if (!rows) return null;
+  const perChainResponses = await querySubgraphs<{ chainStats_collection: ChainStatsEntry[] }>(STATS_QUERY);
+  if (perChainResponses.length === 0) return null;
 
   let totalVolume = BigInt(0);
   let totalPayments = BigInt(0);
-  for (const row of rows) {
-    totalVolume += BigInt(row.totalVolume);
-    totalPayments += BigInt(row.paymentCount);
+  let chainCount = 0;
+  for (const response of perChainResponses) {
+    for (const row of response.chainStats_collection) {
+      totalVolume += BigInt(row.totalVolume);
+      totalPayments += BigInt(row.paymentCount);
+      chainCount += 1;
+    }
   }
 
   return {
     volumeUsdc: formatUsdc(totalVolume),
     paymentCount: totalPayments.toLocaleString("en-US"),
-    chainCount: rows.length,
+    chainCount,
   };
 }
 
@@ -82,7 +76,7 @@ export default function LiveStatsBar() {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    if (!SUBGRAPH_URL) return;
+    if (!hasSubgraphs()) return;
 
     let cancelled = false;
 
@@ -139,12 +133,12 @@ export default function LiveStatsBar() {
             </div>
           ))}
         </div>
-        {!SUBGRAPH_URL && (
+        {!hasSubgraphs() && (
           <p className="mt-4 text-center text-sm text-white/40">
             live stats connect once the subgraph is deployed
           </p>
         )}
-        {SUBGRAPH_URL && failed && !stats && (
+        {hasSubgraphs() && failed && !stats && (
           <p className="mt-4 text-center text-sm text-white/40">
             reconnecting to the subgraph&hellip;
           </p>

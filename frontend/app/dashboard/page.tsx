@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { formatUnits } from "viem";
 import { explorerTxUrl } from "@breeja/sdk";
 import { getChainById } from "@/lib/chains";
-
-const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL;
+import { hasSubgraphs, querySubgraphs } from "@/lib/subgraphs";
 
 const HISTORY_QUERY = `
   query DashboardHistory {
@@ -45,10 +44,6 @@ interface PaymentEntry {
   sourceTxHash: string;
   requestedAt: string;
   release: ReleaseEntry | null;
-}
-
-interface SubgraphHistoryResponse {
-  data?: { payments: PaymentEntry[] };
 }
 
 type LoadState = "loading" | "ready" | "error" | "unconfigured";
@@ -91,36 +86,34 @@ function UnconfiguredState() {
     <div className="rounded-2xl border border-border p-12 text-center">
       <p className="text-ink font-medium mb-2">Dashboard not connected.</p>
       <p className="text-body text-sm">
-        Set <span className="font-mono">NEXT_PUBLIC_SUBGRAPH_URL</span> to a deployed Breeja subgraph to see payment
-        history here.
+        Set <span className="font-mono">NEXT_PUBLIC_SUBGRAPH_URLS</span> to one or more deployed Breeja subgraphs to
+        see payment history here.
       </p>
     </div>
   );
 }
 
 export default function DashboardPage() {
-  const [state, setState] = useState<LoadState>(SUBGRAPH_URL ? "loading" : "unconfigured");
+  const [state, setState] = useState<LoadState>(hasSubgraphs() ? "loading" : "unconfigured");
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
 
   useEffect(() => {
-    if (!SUBGRAPH_URL) return;
+    if (!hasSubgraphs()) return;
 
     let cancelled = false;
 
     async function load() {
       try {
-        const response = await fetch(SUBGRAPH_URL as string, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: HISTORY_QUERY }),
-        });
-        const body = (await response.json()) as SubgraphHistoryResponse;
+        const perChainResponses = await querySubgraphs<{ payments: PaymentEntry[] }>(HISTORY_QUERY);
         if (cancelled) return;
-        if (!response.ok || !body.data) {
+        if (perChainResponses.length === 0) {
           setState("error");
           return;
         }
-        setPayments(body.data.payments);
+        const merged = perChainResponses
+          .flatMap((response) => response.payments)
+          .sort((a, b) => Number(b.requestedAt) - Number(a.requestedAt));
+        setPayments(merged);
         setState("ready");
       } catch {
         if (!cancelled) setState("error");

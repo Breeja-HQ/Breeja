@@ -6,7 +6,7 @@
   "scripts": {
     "codegen": "graph codegen",
     "build": "graph build",
-    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ breeja-optimism-sepolia"
+    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ optimism-sepolia"
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "0.98.1",

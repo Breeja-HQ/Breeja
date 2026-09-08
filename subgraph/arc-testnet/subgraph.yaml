@@ -1,0 +1,48 @@
+specVersion: 1.3.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: SourceVault
+    network: arc-testnet
+    source:
+      address: "0xfd2f67cD354545712f9d8230170015d7e30d133A"
+      abi: SourceVault
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Payment
+        - ChainStats
+      abis:
+        - name: SourceVault
+          file: ./abis/SourceVault.json
+      eventHandlers:
+        - event: PaymentRequested(indexed address,indexed address,uint256,uint256,uint256)
+          handler: handlePaymentRequested
+      file: ./src/mapping.ts
+  - kind: ethereum
+    name: DestPool
+    network: arc-testnet
+    source:
+      address: "0xA5dd225Beb2Ec0009Fe143eb0B9309Ba07d23737"
+      abi: DestPool
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Release
+        - ChainStats
+      abis:
+        - name: DestPool
+          file: ./abis/DestPool.json
+      eventHandlers:
+        - event: Released(indexed address,uint256,uint256,bytes32)
+          handler: handleReleased
+      file: ./src/mapping.ts

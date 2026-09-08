@@ -1,12 +1,12 @@
 {
-  "name": "@breeja/subgraph-base-sepolia",
+  "name": "@breeja/subgraph-arc-testnet",
   "version": "0.1.0",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
     "codegen": "graph codegen",
     "build": "graph build",
-    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ base-sepolia"
+    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ arc-sepolia"
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "0.98.1",
