@@ -87,3 +87,70 @@ body {
 .motion-lift:active {
   transform: translateY(0.5px);
 }
+
+/* Accordion height animation.
+   CSS cannot transition height:auto, so the outer element is a single-column
+   grid whose only row goes 0fr -> 1fr. The row resolves against the inner
+   element's natural height, so text that rewraps at a different viewport width
+   still animates correctly with no measured pixel value anywhere.
+
+   overflow:hidden clips the collapsed row visually but does NOT take it out of
+   the accessibility tree, so the inner wrapper also carries visibility:hidden
+   while closed. visibility is a discrete-but-transitionable property: it is
+   delayed to the end of the collapse and applied immediately on expand. */
+.breeja-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 280ms ease-out;
+}
+
+.breeja-collapse > * {
+  min-height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    visibility 0s linear 280ms,
+    opacity 200ms ease-out,
+    transform 280ms ease-out;
+}
+
+.breeja-collapse[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.breeja-collapse[data-open="true"] > * {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    visibility 0s linear 0s,
+    opacity 260ms ease-out 60ms,
+    transform 280ms ease-out;
+}
+
+/* Plus/minus cross-fade and rotate, stacked in the same grid cell. */
+.breeja-icon-swap {
+  display: grid;
+  place-items: center;
+}
+
+.breeja-icon-swap > * {
+  grid-area: 1 / 1;
+  transition:
+    opacity 220ms ease-out,
+    transform 280ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breeja-collapse,
+  .breeja-collapse > *,
+  .breeja-icon-swap > * {
+    transition: none !important;
+  }
+
+  .breeja-collapse > * {
+    transform: none !important;
+  }
+}

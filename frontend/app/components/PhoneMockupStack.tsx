@@ -1,4 +1,24 @@
+import Image from "next/image";
 import { Check, Loader2 } from "lucide-react";
+
+import { CHAIN_LOGOS, chainLogoAlt, type ChainLogoKey } from "../../lib/chainLogos";
+
+/**
+ * Chain mark sized for the mockup, where body text runs as small as 9px. Kept
+ * at 14px so it sits on the cap height of the line it joins rather than
+ * stretching the row.
+ */
+function MockChainMark({ chain }: { chain: ChainLogoKey }) {
+  return (
+    <Image
+      src={CHAIN_LOGOS[chain].src}
+      alt={chainLogoAlt(chain)}
+      width={14}
+      height={14}
+      className="h-3.5 w-3.5 shrink-0 rounded-full"
+    />
+  );
+}
 
 export default function PhoneMockupStack() {
   return (
@@ -11,7 +31,11 @@ export default function PhoneMockupStack() {
               <span className="h-2 w-2 rounded-full bg-accent" />
             </div>
             <div className="flex-1 px-3 pb-4">
-              <p className="text-[10px] text-body">Base Sepolia to Arbitrum Sepolia</p>
+              <div className="flex items-center gap-1 text-[10px] text-body">
+                <MockChainMark chain="base" />
+                <span>Base Sepolia to Arbitrum Sepolia</span>
+                <MockChainMark chain="arbitrum" />
+              </div>
               <p className="mt-0.5 text-sm font-semibold text-ink">
                 Sign once, no gas required
               </p>
@@ -57,13 +81,15 @@ export default function PhoneMockupStack() {
               </div>
               <div className="mt-3 space-y-1.5">
                 <div className="flex items-center justify-between rounded-lg border border-white/15 px-2 py-1.5">
-                  <span className="text-[9px] text-white/70">
+                  <span className="flex items-center gap-1.5 text-[9px] text-white/70">
+                    <MockChainMark chain="base" />
                     Base Explorer
                   </span>
                   <span className="text-[10px] text-accent">View</span>
                 </div>
                 <div className="flex items-center justify-between rounded-lg border border-white/15 px-2 py-1.5">
-                  <span className="text-[9px] text-white/70">
+                  <span className="flex items-center gap-1.5 text-[9px] text-white/70">
+                    <MockChainMark chain="arbitrum" />
                     Arbitrum Explorer
                   </span>
                   <span className="text-[10px] text-accent">View</span>

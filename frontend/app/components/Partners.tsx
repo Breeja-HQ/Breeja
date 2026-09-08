@@ -1,8 +1,14 @@
+import Image from "next/image";
 import Link from "next/link";
+
+import { CHAIN_LOGOS, chainLogoAlt, type ChainLogoKey } from "../../lib/chainLogos";
 
 interface Partner {
   name: string;
+  /** Single-letter fallback badge, used where the partner is not a chain. */
   mark: string;
+  /** Set only for the two chain entries, which show their real mark instead. */
+  logo?: ChainLogoKey;
   description: string;
   href: string;
 }
@@ -23,6 +29,7 @@ const PARTNERS: Partner[] = [
   {
     name: "Circle Arc",
     mark: "A",
+    logo: "arc",
     description:
       "Arc Testnet runs the full mesh on native USDC, with a live verified round trip out to Base Sepolia",
     href: "/docs/live-chains",
@@ -44,6 +51,7 @@ const PARTNERS: Partner[] = [
   {
     name: "Hedera",
     mark: "H",
+    logo: "hedera",
     description:
       "Deployed with a live verified round trip. Hedera's USDC has no EIP-3009, so the payer approves and pays their own gas there",
     href: "/docs/chains",
@@ -57,11 +65,29 @@ const PARTNERS: Partner[] = [
   },
 ];
 
-function PartnerMark({ mark }: { mark: string }) {
+// One box for both treatments, so a card carrying a real chain mark and a card
+// carrying a letter badge occupy the exact same 48px rounded tile.
+const MARK_BOX =
+  "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-badge-bg";
+
+function PartnerMark({ mark, logo }: { mark: string; logo?: ChainLogoKey }) {
+  if (logo) {
+    const chain = CHAIN_LOGOS[logo];
+    return (
+      <span className={MARK_BOX}>
+        <Image
+          src={chain.src}
+          alt={chainLogoAlt(logo)}
+          width={26}
+          height={26}
+          className="rounded-full"
+        />
+      </span>
+    );
+  }
+
   return (
-    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-badge-bg text-lg font-bold text-accent">
-      {mark}
-    </span>
+    <span className={`${MARK_BOX} text-lg font-bold text-accent`}>{mark}</span>
   );
 }
 
@@ -89,7 +115,7 @@ export default function Partners() {
               href={partner.href}
               className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-7 hover:border-accent transition-colors"
             >
-              <PartnerMark mark={partner.mark} />
+              <PartnerMark mark={partner.mark} logo={partner.logo} />
               <div>
                 <p className="text-xl font-semibold text-ink">{partner.name}</p>
                 <p className="mt-2 text-lg text-body leading-relaxed">

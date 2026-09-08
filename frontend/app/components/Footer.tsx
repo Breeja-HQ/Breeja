@@ -1,4 +1,7 @@
+import Image from "next/image";
 import Link from "next/link";
+
+import { CHAIN_LOGO_LIST, chainLogoAlt } from "../../lib/chainLogos";
 import BreejaLogo from "./BreejaLogo";
 
 function GithubIcon({ className }: { className?: string }) {
@@ -78,7 +81,26 @@ export default function Footer() {
 
         <div className="border-t border-border mt-8 pt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-base text-body">
           <p>&copy; 2026 Breeja. Testnet demo.</p>
-          <p>Base, Arbitrum, Optimism, Arc, Hedera &amp; Ethereum Sepolia</p>
+          {/* The chain list, as marks. Each image keeps its network name as alt
+              text, so the row still reads as the sentence it replaced. */}
+          <ul className="flex flex-wrap items-center justify-center gap-3">
+            {CHAIN_LOGO_LIST.map((chain) => (
+              <li key={chain.key} className="flex">
+                <span
+                  className="motion-lift flex h-6 w-6 items-center justify-center rounded-lg opacity-80 hover:opacity-100"
+                  title={chain.name}
+                >
+                  <Image
+                    src={chain.src}
+                    alt={chainLogoAlt(chain.key)}
+                    width={22}
+                    height={22}
+                    className="rounded-full"
+                  />
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </footer>

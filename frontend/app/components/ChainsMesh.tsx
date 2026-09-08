@@ -1,125 +1,112 @@
+import Image from "next/image";
+import { ArrowUpFromLine, Fuel, Repeat } from "lucide-react";
+
+import { CHAIN_LOGOS } from "../../lib/chainLogos";
 import Reveal from "./Reveal";
 
-type Point = { x: number; y: number };
+/**
+ * Logo-forward chains section. The five full-mesh chains sit on a ring with a
+ * soft connecting web behind them; Ethereum Sepolia sits below as the
+ * source-only feeder. Copy is deliberately minimal: the badges carry the two
+ * exceptions (source only, not gasless) that a paragraph used to carry.
+ */
 
-const SIZE = 520;
-const CENTER: Point = { x: 260, y: 235 };
-const RADIUS = 165;
-const NODE_R = 38;
-const SOURCE_R = 33;
-
-// Five full-mesh chains evenly on a circle, one at top center.
+const RING_SIZE = 460;
+const RING_CENTER = RING_SIZE / 2;
+const RING_RADIUS = 168;
+// Five evenly spaced positions with one at top centre.
 const RING_ANGLES = [-90, -18, 54, 126, 198];
-
-function polar(angleDeg: number, radius: number): Point {
-  const rad = (angleDeg * Math.PI) / 180;
-  return {
-    x: CENTER.x + radius * Math.cos(rad),
-    y: CENTER.y + radius * Math.sin(rad),
-  };
-}
-
-type LabelPlacement = {
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
 
 type MeshChain = {
   key: string;
   name: string;
-  pos: Point;
-  label: LabelPlacement;
+  short: string;
+  logo: string;
+  /** Percentage offsets used to position the logo tile inside the ring box. */
+  left: number;
+  top: number;
+  note?: string;
 };
 
-// Label offsets are per-position so nothing collides with a circle or a
-// neighbouring label: top label sits above, side labels sit outside, bottom
-// labels sit below and are nudged outward.
-const RING_LABELS: LabelPlacement[] = [
-  { dx: 0, dy: -NODE_R - 16, anchor: "middle" }, // top
-  { dx: NODE_R + 12, dy: 6, anchor: "start" }, // upper right
-  { dx: 10, dy: NODE_R + 28, anchor: "middle" }, // lower right
-  { dx: -10, dy: NODE_R + 28, anchor: "middle" }, // lower left
-  { dx: -NODE_R - 12, dy: 6, anchor: "end" }, // upper left
-];
+function ringPoint(angleDeg: number) {
+  const rad = (angleDeg * Math.PI) / 180;
+  return {
+    left: ((RING_CENTER + RING_RADIUS * Math.cos(rad)) / RING_SIZE) * 100,
+    top: ((RING_CENTER + RING_RADIUS * Math.sin(rad)) / RING_SIZE) * 100,
+  };
+}
 
-const MESH_CHAINS: MeshChain[] = [
-  "Base Sepolia",
-  "Arbitrum Sepolia",
-  "Hedera Testnet",
-  "Arc Testnet",
-  "Optimism Sepolia",
-].map((name, i) => ({
-  key: name.toLowerCase().replace(/\s+/g, "-"),
-  name,
-  pos: polar(RING_ANGLES[i], RADIUS),
-  label: RING_LABELS[i],
-}));
+const RING_CHAINS: MeshChain[] = (
+  [
+    { ...CHAIN_LOGOS.base, logo: CHAIN_LOGOS.base.src },
+    { ...CHAIN_LOGOS.arbitrum, logo: CHAIN_LOGOS.arbitrum.src },
+    { ...CHAIN_LOGOS.hedera, logo: CHAIN_LOGOS.hedera.src, note: "not gasless" },
+    { ...CHAIN_LOGOS.arc, logo: CHAIN_LOGOS.arc.src },
+    { ...CHAIN_LOGOS.optimism, logo: CHAIN_LOGOS.optimism.src },
+  ] as const
+).map((chain, i) => ({ ...chain, ...ringPoint(RING_ANGLES[i]) }));
 
-const SOURCE_NODE = {
-  key: "ethereum-sepolia",
-  name: "Ethereum Sepolia",
-  pos: { x: CENTER.x, y: CENTER.y + RADIUS + 155 },
+const SOURCE_CHAIN = {
+  ...CHAIN_LOGOS.ethereum,
+  logo: CHAIN_LOGOS.ethereum.src,
+  note: "source only",
 };
 
-const MESH_EDGES: Array<[MeshChain, MeshChain]> = [];
-for (let i = 0; i < MESH_CHAINS.length; i += 1) {
-  for (let j = i + 1; j < MESH_CHAINS.length; j += 1) {
-    MESH_EDGES.push([MESH_CHAINS[i], MESH_CHAINS[j]]);
+// Every pair of ring chains, drawn as the soft web behind the logos.
+const MESH_EDGES: Array<[number, number]> = [];
+for (let i = 0; i < RING_ANGLES.length; i += 1) {
+  for (let j = i + 1; j < RING_ANGLES.length; j += 1) {
+    MESH_EDGES.push([i, j]);
   }
 }
 
-// The source-only chain feeds the two nearest ring nodes plus the top node,
-// enough to read as "sends into the mesh" without a thicket of dashes.
-const SOURCE_TARGETS = [MESH_CHAINS[2], MESH_CHAINS[3]];
+function edgeCoords(i: number) {
+  const rad = (RING_ANGLES[i] * Math.PI) / 180;
+  return {
+    x: RING_CENTER + RING_RADIUS * Math.cos(rad),
+    y: RING_CENTER + RING_RADIUS * Math.sin(rad),
+  };
+}
 
-function ChainNode({
-  pos,
+function ChainTile({
+  logo,
   name,
-  label,
-  sourceOnly,
+  short,
+  note,
   index,
+  size = 76,
 }: {
-  pos: Point;
+  logo: string;
   name: string;
-  label: LabelPlacement;
-  sourceOnly?: boolean;
+  short: string;
+  note?: string;
   index: number;
+  size?: number;
 }) {
-  const r = sourceOnly ? SOURCE_R : NODE_R;
   return (
-    <g
-      className="mesh-node"
-      style={{ animationDelay: `${index * 110}ms`, transformOrigin: `${pos.x}px ${pos.y}px` }}
+    <div
+      className="chain-tile group flex flex-col items-center"
+      style={{ ["--chain-delay" as string]: `${index * 620}ms` }}
     >
-      <circle
-        cx={pos.x}
-        cy={pos.y}
-        r={r}
-        className="fill-surface"
-        stroke="var(--color-ink)"
-        strokeWidth={2}
-      />
-      <circle cx={pos.x} cy={pos.y} r={6} className="fill-accent" />
-      <text
-        x={pos.x + label.dx}
-        y={pos.y + label.dy}
-        textAnchor={label.anchor}
-        className="fill-ink font-sans text-[14px] font-semibold"
+      <span
+        className="chain-mark relative flex items-center justify-center rounded-3xl border border-border bg-surface shadow-sm"
+        style={{ width: size, height: size }}
       >
-        {name}
-      </text>
-      {sourceOnly && (
-        <text
-          x={pos.x + label.dx}
-          y={pos.y + label.dy + 20}
-          textAnchor={label.anchor}
-          className="fill-body font-sans text-[12px]"
-        >
-          source only
-        </text>
-      )}
-    </g>
+        <Image
+          src={logo}
+          alt={`${name} logo`}
+          width={size - 26}
+          height={size - 26}
+          className="rounded-full"
+        />
+      </span>
+      <span className="mt-3 text-base font-semibold text-ink">{short}</span>
+      {note ? (
+        <span className="mt-1 rounded-full bg-badge-bg px-2.5 py-0.5 text-xs font-medium text-accent">
+          {note}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -135,162 +122,162 @@ export default function ChainsMesh() {
             <h2 className="mt-4 text-5xl md:text-6xl font-bold tracking-tight text-ink">
               A mesh, not a bridge
             </h2>
-            <p className="mt-4 max-w-2xl text-xl text-body leading-relaxed">
-              Base, Arbitrum, Optimism, Arc, and Hedera are each a source and a
-              destination. A payment can move in either direction between any
-              two of them. Ethereum Sepolia sends into the mesh but does not
-              receive.
+            <p className="mt-4 max-w-xl text-xl text-body leading-relaxed">
+              Five chains, every direction. Pay from any of them, land on any of
+              them.
             </p>
           </div>
         </Reveal>
 
-        <div className="mt-14 grid grid-cols-1 items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
-          <Reveal>
-            <div className="mx-auto w-full max-w-xl">
-              <svg
-                viewBox={`0 0 ${SIZE} ${SIZE}`}
-                className="w-full breeja-mesh"
-                role="img"
-                aria-label="Diagram of the Breeja chain mesh: Base Sepolia, Arbitrum Sepolia, Optimism Sepolia, Arc Testnet and Hedera Testnet are fully interconnected as both source and destination, with Ethereum Sepolia sending into the mesh as a source-only chain."
-              >
-                <style>{`
-                  .breeja-mesh .mesh-edge {
-                    stroke-opacity: 0.85;
-                    animation: breeja-mesh-pulse 7s ease-in-out infinite;
-                  }
-                  .breeja-mesh .mesh-dash {
-                    animation: breeja-mesh-drift 9s linear infinite;
-                  }
-                  .breeja-mesh .mesh-node {
-                    opacity: 0;
-                    transform: scale(0.94);
-                    animation: breeja-mesh-in 900ms ease-out forwards;
-                  }
-                  @keyframes breeja-mesh-pulse {
-                    0%, 100% { stroke-opacity: 0.5; }
-                    50% { stroke-opacity: 1; }
-                  }
-                  @keyframes breeja-mesh-drift {
-                    from { stroke-dashoffset: 0; }
-                    to { stroke-dashoffset: -28; }
-                  }
-                  @keyframes breeja-mesh-in {
-                    from { opacity: 0; transform: scale(0.94); }
-                    to { opacity: 1; transform: scale(1); }
-                  }
-                  @media (prefers-reduced-motion: reduce) {
-                    .breeja-mesh .mesh-edge,
-                    .breeja-mesh .mesh-dash,
-                    .breeja-mesh .mesh-node {
-                      animation: none;
-                      opacity: 1;
-                      transform: none;
-                      stroke-opacity: 0.85;
-                    }
-                  }
-                `}</style>
-
-                {MESH_EDGES.map(([a, b], i) => (
-                  <line
-                    key={`${a.key}-${b.key}`}
-                    className="mesh-edge"
-                    x1={a.pos.x}
-                    y1={a.pos.y}
-                    x2={b.pos.x}
-                    y2={b.pos.y}
-                    stroke="var(--color-accent)"
-                    strokeWidth={2.5}
-                    strokeLinecap="round"
-                    style={{ animationDelay: `${i * 420}ms` }}
-                  />
-                ))}
-
-                {SOURCE_TARGETS.map((target) => (
-                  <line
-                    key={`source-${target.key}`}
-                    className="mesh-dash"
-                    x1={SOURCE_NODE.pos.x}
-                    y1={SOURCE_NODE.pos.y}
-                    x2={target.pos.x}
-                    y2={target.pos.y}
-                    stroke="var(--color-border)"
-                    strokeWidth={3}
-                    strokeDasharray="7 7"
-                    strokeLinecap="round"
-                  />
-                ))}
-
-                {MESH_CHAINS.map((chain, i) => (
-                  <ChainNode
-                    key={chain.key}
-                    index={i}
-                    pos={chain.pos}
-                    name={chain.name}
-                    label={chain.label}
-                  />
-                ))}
-
-                <ChainNode
-                  index={MESH_CHAINS.length}
-                  pos={SOURCE_NODE.pos}
-                  name={SOURCE_NODE.name}
-                  label={{ dx: 0, dy: SOURCE_R + 24, anchor: "middle" }}
-                  sourceOnly
+        <Reveal delay={100}>
+          <div className="breeja-chains mt-14 flex flex-col items-center">
+            {/* Narrow screens: a plain grid, where a 460px ring would crowd. */}
+            <div className="grid w-full max-w-sm grid-cols-3 gap-x-4 gap-y-8 sm:hidden">
+              {RING_CHAINS.map((chain, i) => (
+                <ChainTile
+                  key={chain.key}
+                  logo={chain.logo}
+                  name={chain.name}
+                  short={chain.short}
+                  note={chain.note}
+                  index={i}
+                  size={64}
                 />
+              ))}
+            </div>
+
+            {/* Ring: five full-mesh chains over a soft connecting web. */}
+            <div
+              className="relative hidden w-full max-w-115 sm:block"
+              style={{ aspectRatio: "1 / 1" }}
+            >
+              <svg
+                viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
+                className="absolute inset-0 h-full w-full"
+                aria-hidden="true"
+              >
+                <circle
+                  cx={RING_CENTER}
+                  cy={RING_CENTER}
+                  r={RING_RADIUS}
+                  fill="none"
+                  stroke="var(--color-border)"
+                  strokeWidth={1.5}
+                />
+                {MESH_EDGES.map(([a, b]) => {
+                  const p = edgeCoords(a);
+                  const q = edgeCoords(b);
+                  return (
+                    <line
+                      key={`${a}-${b}`}
+                      className="chain-edge"
+                      x1={p.x}
+                      y1={p.y}
+                      x2={q.x}
+                      y2={q.y}
+                      stroke="var(--color-accent)"
+                      strokeWidth={1.5}
+                      strokeLinecap="round"
+                    />
+                  );
+                })}
               </svg>
 
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-6 text-base text-body">
-                <span className="flex items-center gap-2">
-                  <span className="h-1 w-6 rounded-full bg-accent" />
-                  source and destination
-                </span>
-                <span className="flex items-center gap-2">
-                  <span
-                    className="h-0.5 w-6 border-t-2 border-dashed"
-                    style={{ borderColor: "var(--color-border)" }}
+              {RING_CHAINS.map((chain, i) => (
+                <div
+                  key={chain.key}
+                  className="absolute -translate-x-1/2 -translate-y-1/2"
+                  style={{ left: `${chain.left}%`, top: `${chain.top}%` }}
+                >
+                  <ChainTile
+                    logo={chain.logo}
+                    name={chain.name}
+                    short={chain.short}
+                    note={chain.note}
+                    index={i}
                   />
-                  source only
-                </span>
-              </div>
+                </div>
+              ))}
             </div>
-          </Reveal>
 
-          <Reveal delay={120}>
-            <div className="flex flex-col gap-4">
-              <div className="rounded-xl border border-border bg-white p-6">
-                <p className="text-lg font-semibold text-ink">
-                  Base, Arbitrum, Optimism, Arc, Hedera
-                </p>
-                <p className="mt-2 text-lg text-body leading-relaxed">
-                  Full mesh. Every pair of these five chains routes in both
-                  directions, twenty viable from-to pairs today. On Base,
-                  Arbitrum, Optimism, and Arc the payer signs an EIP-3009
-                  permit and the relayer pays the gas.
-                </p>
-              </div>
-              <div className="rounded-xl border border-border bg-white p-6">
-                <p className="text-lg font-semibold text-ink">
-                  Hedera is not gasless
-                </p>
-                <p className="mt-2 text-lg text-body leading-relaxed">
-                  USDC on Hedera does not implement EIP-3009, so there is no
-                  permit to sign. The payer approves and pays their own gas on
-                  that leg. Routing, speed, and the destination release work
-                  exactly as they do everywhere else.
-                </p>
-              </div>
-              <div className="rounded-xl border border-border bg-white p-6">
-                <p className="text-lg font-semibold text-ink">
-                  Ethereum Sepolia
-                </p>
-                <p className="mt-2 text-lg text-body leading-relaxed">
-                  Source only. Destination liquidity there costs more gas than
-                  the fee earns, so it sends into the mesh but never receives.
-                </p>
+            {/* Source-only chain, set apart below the ring. */}
+            <div className="mt-10 flex flex-col items-center sm:mt-2">
+              <span
+                className="hidden h-10 w-px sm:block"
+                style={{
+                  backgroundImage:
+                    "repeating-linear-gradient(to bottom, var(--color-border) 0 5px, transparent 5px 10px)",
+                }}
+                aria-hidden="true"
+              />
+              <div className="mt-3">
+                <ChainTile
+                  logo={SOURCE_CHAIN.logo}
+                  name={SOURCE_CHAIN.name}
+                  short={SOURCE_CHAIN.short}
+                  note={SOURCE_CHAIN.note}
+                  index={RING_CHAINS.length}
+                  size={64}
+                />
               </div>
             </div>
-          </Reveal>
-        </div>
+
+            {/* Compact legend: three short lines instead of three cards. */}
+            <div className="mt-12 flex flex-col items-center gap-3 text-base text-body sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-8">
+              <span className="flex items-center gap-2">
+                <Repeat className="h-4 w-4 text-accent" aria-hidden="true" />
+                Base, Arbitrum, Optimism, Arc, Hedera route both ways
+              </span>
+              <span className="flex items-center gap-2">
+                <ArrowUpFromLine
+                  className="h-4 w-4 text-accent"
+                  aria-hidden="true"
+                />
+                Ethereum Sepolia sends only
+              </span>
+              <span className="flex items-center gap-2">
+                <Fuel className="h-4 w-4 text-accent" aria-hidden="true" />
+                Hedera is the one chain where you pay your own gas
+              </span>
+            </div>
+
+            <style>{`
+              .breeja-chains .chain-edge {
+                stroke-opacity: 0.28;
+                animation: breeja-chain-web 12s ease-in-out infinite;
+              }
+              .breeja-chains .chain-mark {
+                animation: breeja-chain-float 9s ease-in-out infinite;
+                animation-delay: var(--chain-delay, 0ms);
+                transition: transform 320ms ease-out, box-shadow 320ms ease-out;
+              }
+              .breeja-chains .chain-tile:hover .chain-mark {
+                transform: translateY(-3px) scale(1.04);
+                box-shadow: 0 10px 24px -12px var(--color-accent);
+              }
+              @keyframes breeja-chain-web {
+                0%, 100% { stroke-opacity: 0.16; }
+                50% { stroke-opacity: 0.4; }
+              }
+              @keyframes breeja-chain-float {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-5px); }
+              }
+              @media (prefers-reduced-motion: reduce) {
+                .breeja-chains .chain-edge,
+                .breeja-chains .chain-mark {
+                  animation: none;
+                  stroke-opacity: 0.28;
+                  transform: none;
+                  transition: none;
+                }
+                .breeja-chains .chain-tile:hover .chain-mark {
+                  transform: none;
+                }
+              }
+            `}</style>
+          </div>
+        </Reveal>
       </div>
     </section>
   );

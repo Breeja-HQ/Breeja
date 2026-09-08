@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, Loader2, Mail, PenLine, Receipt, RotateCcw, ShieldCheck, Zap } from "lucide-react";
 import { usePaymentWidget } from "@/lib/hooks/usePaymentWidget";
+import Nav from "@/app/components/Nav";
 import AmountRecipientForm from "@/app/components/pay/AmountRecipientForm";
 import RouteList from "@/app/components/pay/RouteList";
 import WrongNetworkPrompt from "@/app/components/pay/WrongNetworkPrompt";
@@ -13,14 +14,14 @@ export default function PayPage() {
   const widget = usePaymentWidget();
 
   return (
-    <main className="flex w-full min-h-screen flex-col items-center justify-center bg-white px-5 py-14 md:px-8 md:py-20">
-      <div className="w-full max-w-xl">
+    <>
+      {/* Nav carries the wallet connect buttons. Without it there was no way
+          to connect a wallet on this route at all, which made it unusable. */}
+      <Nav />
+      <main className="flex w-full flex-col items-center justify-center bg-white px-5 py-14 md:px-8 md:py-20">
+        <div className="w-full max-w-xl">
         <header className="text-center">
-          <span className="inline-flex items-center gap-2 rounded-full bg-badge-bg px-5 py-2 text-base font-semibold text-accent">
-            <Zap className="h-4 w-4" aria-hidden="true" />
-            Breeja settlement
-          </span>
-          <h1 className="mt-5 font-sans text-4xl font-bold tracking-tight text-ink md:text-5xl">
+          <h1 className="font-sans text-4xl font-bold tracking-tight text-ink md:text-5xl">
             Send a payment
           </h1>
           <p className="mx-auto mt-4 max-w-md text-lg leading-relaxed text-body md:text-xl">
@@ -197,8 +198,9 @@ export default function PayPage() {
             <Receipt className="h-4 w-4" aria-hidden="true" />
             View your payments
           </Link>
-        </nav>
-      </div>
-    </main>
+          </nav>
+        </div>
+      </main>
+    </>
   );
 }

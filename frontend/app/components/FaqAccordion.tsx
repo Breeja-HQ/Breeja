@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 
 type FaqItem = {
@@ -17,7 +17,7 @@ const faqItems: FaqItem[] = [
   {
     question: "How is this gasless?",
     answer:
-      "The payer signs a free, off-chain EIP-3009 permit naming a recipient and amount. No transaction, no gas. The relayer submits the deposit on the source chain and the release on the destination chain, paying gas on both sides, and recoups that cost via a small fee. Neither side ever needs to hold a gas token.",
+      "The payer signs a free, off-chain EIP-3009 permit naming a recipient and amount. No transaction, no gas. The relayer submits the deposit on the source chain and the release on the destination chain, paying gas on both sides, and recoups that cost via a small fee. Neither side ever needs to hold a gas token. One honest exception: Hedera's USDC does not implement EIP-3009, so paying from Hedera means approving on-chain and covering that gas yourself.",
   },
   {
     question: "Can an agent use Breeja without a human in the loop?",
@@ -27,12 +27,13 @@ const faqItems: FaqItem[] = [
   {
     question: "What networks does this support today?",
     answer:
-      "Base, Arbitrum, and Optimism Sepolia are live as both source and destination. Ethereum Sepolia is a source-only chain: it can send into the mesh but has no destination pool. Testnet only, for now.",
+      "Six chains. Base, Arbitrum, and Optimism Sepolia, plus Circle's Arc Testnet and Hedera Testnet, are all live as both source and destination. Ethereum Sepolia is source-only: it can send into the mesh but has no destination pool. Every one of them has a real deploy and a verified round trip on-chain. Testnet only, for now.",
   },
 ];
 
 export default function FaqAccordion() {
   const [openQuestions, setOpenQuestions] = useState<Set<string>>(new Set());
+  const baseId = useId();
 
   function toggleQuestion(question: string) {
     setOpenQuestions((prev) => {
@@ -54,26 +55,52 @@ export default function FaqAccordion() {
         </h2>
 
         <div className="mt-12 max-w-3xl mx-auto">
-          {faqItems.map((item) => {
+          {faqItems.map((item, index) => {
             const isOpen = openQuestions.has(item.question);
+            const panelId = `${baseId}-faq-panel-${index}`;
+            const buttonId = `${baseId}-faq-button-${index}`;
             return (
               <div key={item.question} className="border-b border-border">
                 <button
                   type="button"
+                  id={buttonId}
                   onClick={() => toggleQuestion(item.question)}
                   aria-expanded={isOpen}
-                  className="flex justify-between items-center w-full py-6 text-left text-xl font-medium text-ink"
+                  aria-controls={panelId}
+                  className="motion-lift group flex w-full items-center justify-between gap-6 rounded-xl px-3 py-6 text-left text-xl font-medium text-ink outline-none hover:bg-badge-bg focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                 >
-                  <span>{item.question}</span>
-                  <span className="ml-6 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-badge-bg text-accent">
-                    {isOpen ? <Minus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  <span className="transition-colors duration-200 group-hover:text-accent">
+                    {item.question}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="breeja-icon-swap h-8 w-8 shrink-0 rounded-full bg-badge-bg text-accent transition-colors duration-200 group-hover:bg-accent group-hover:text-white"
+                  >
+                    <Plus
+                      className={`h-4 w-4 ${
+                        isOpen ? "rotate-90 opacity-0" : "rotate-0 opacity-100"
+                      }`}
+                    />
+                    <Minus
+                      className={`h-4 w-4 ${
+                        isOpen ? "rotate-0 opacity-100" : "-rotate-90 opacity-0"
+                      }`}
+                    />
                   </span>
                 </button>
-                {isOpen && (
-                  <p className="text-body text-xl leading-relaxed pb-6 pr-8">
-                    {item.answer}
-                  </p>
-                )}
+
+                <div className="breeja-collapse" data-open={isOpen}>
+                  <div
+                    id={panelId}
+                    role="region"
+                    aria-labelledby={buttonId}
+                    inert={!isOpen}
+                  >
+                    <p className="text-body text-xl leading-relaxed px-3 pb-6 pr-8">
+                      {item.answer}
+                    </p>
+                  </div>
+                </div>
               </div>
             );
           })}
