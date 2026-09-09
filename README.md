@@ -13,7 +13,7 @@ An autonomous agent pays another agent on a different chain with one SDK call. A
 | **GitHub** | https://github.com/Breeja-HQ/Breeja |
 | **X** | https://x.com/usebreeja |
 | **Pitch deck** | [Google Slides](https://docs.google.com/presentation/d/1Uz701EtaVXlCI3QkhYeWl4SV9VPj8FuF/edit?usp=sharing&ouid=114786194621053890385&rtpof=true&sd=true) |
-| **Demo video** | coming soon |
+| **Demo video** | https://youtu.be/pOrM9hVgczU |
 
 **Deployed and live-verified on 6 chains** with real on-chain round trips: Ethereum Sepolia (source-only), Base Sepolia, Arbitrum Sepolia, Optimism Sepolia, **Arc Testnet** (Circle's own chain, native USDC), and **Hedera Testnet**. Every address and transaction hash below is real and clickable. Testnet only.
 

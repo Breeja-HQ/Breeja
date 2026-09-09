@@ -18,6 +18,11 @@ const LINKS: TopLink[] = [
     Icon: Presentation,
   },
   {
+    label: "Demo video",
+    href: "https://youtu.be/pOrM9hVgczU",
+    Icon: Video,
+  },
+  {
     label: "GitHub",
     href: "https://github.com/Breeja-HQ/Breeja",
     Icon: FolderGit2,
@@ -44,11 +49,6 @@ export default function TopLinksBar() {
               <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             </a>
           ))}
-
-          <span className="inline-flex items-center gap-1.5 text-body">
-            <Video className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>Demo video: coming soon</span>
-          </span>
         </div>
       </div>
     </div>
