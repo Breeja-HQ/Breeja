@@ -47,6 +47,24 @@ function formatQuote(raw: QuoteResponse): QuoteResponse {
   };
 }
 
+// The relayer returns machine-readable reason codes. Surfacing those raw
+// ("InsufficientPayerBalance") tells the user nothing actionable, so map the
+// ones a person can actually do something about to plain language.
+function explainQuoteRejection(reason: string | undefined, sourceChainName: string): string {
+  switch (reason) {
+    case "InsufficientPayerBalance":
+      return `Not enough USDC on ${sourceChainName}. Top up that wallet on ${sourceChainName}, or pick a source chain where you already hold USDC.`;
+    case "InsufficientLiquidity":
+      return "The destination pool does not currently hold enough USDC to cover this payment. Try a smaller amount or a different destination chain.";
+    case "PoolPaused":
+      return "The destination pool is paused right now, so payments to that chain cannot settle. Try a different destination chain.";
+    case "NoViableRoute":
+      return "No route can settle this payment right now. Try a different chain pair or amount.";
+    default:
+      return reason ?? "No viable route for this payment";
+  }
+}
+
 function randomNonce(): `0x${string}` {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return `0x${Array.from(bytes)
@@ -56,7 +74,15 @@ function randomNonce(): `0x${string}` {
 
 export function usePaymentWidget() {
   const { address: wagmiAddress, chainId: walletChainId } = useAccount();
-  const { switchChainAsync, isPending: isSwitching } = useSwitchChain();
+  const { switchChainAsync, isPending: isSwitchPending } = useSwitchChain();
+  // Own tracked flag rather than trusting wagmi's isPending alone: some
+  // connectors never settle switchChainAsync for a chain the wallet has
+  // never seen before, which would otherwise leave the switch button
+  // permanently disabled with no way to retry. isSwitchPending is still
+  // ORed in below for the normal, fast case so the button reacts instantly
+  // when the connector does behave.
+  const [isSwitchingSource, setIsSwitchingSource] = useState(false);
+  const isSwitching = isSwitchPending || isSwitchingSource;
   const { signTypedDataAsync } = useSignTypedData();
   const privy = usePrivySigner();
 
@@ -124,6 +150,22 @@ export function usePaymentWidget() {
   const wrongNetwork =
     !usingPrivy && Boolean(sourceChain && walletChainId !== undefined && walletChainId !== sourceChain.chainId);
 
+  // wrongNetwork is recomputed on every render, but the state machine only
+  // reads it once, when fetchQuote first resolves. If the wallet's active
+  // chain changes afterward (the user switches network in their extension,
+  // or picks a different source chain after already quoting) ready_to_sign
+  // does not re-check it before signing. viem then throws building the
+  // typed-data domain against a chainId the wallet is not actually on
+  // ("Provided chainId ... must match the active chainId ..."), which
+  // surfaces to the user as a raw viem error instead of a network prompt.
+  // Watch it here so a mismatch appearing after the quote still routes back
+  // to the switch-network screen instead of reaching signTypedDataAsync.
+  useEffect(() => {
+    if (wrongNetwork && (state === "ready_to_sign" || state === "submitting")) {
+      setState("wrong_network");
+    }
+  }, [wrongNetwork, state]);
+
   const fetchQuote = useCallback(async () => {
     if (!sourceChain || !destChain || !amount || !recipient) return;
     const key = `${sourceChain.chainId}-${destChain.chainId}-${amount}-${recipient}`;
@@ -144,10 +186,18 @@ export function usePaymentWidget() {
           amount: toSmallestUnits(amount),
         }),
       });
-      const raw = (await response.json()) as QuoteResponse & { error?: string };
+      const raw = (await response.json()) as QuoteResponse & {
+        error?: string;
+        quote?: QuoteResponse;
+      };
       if (!response.ok || !raw.viable) {
-        setError(raw.error ?? "No viable route for this payment");
-        setQuote(raw.routes ? formatQuote(raw) : null);
+        // A 422 nests the real quote (and its per-route reasons) under
+        // `quote`, with a generic "NoViableRoute" at the top level. The
+        // per-route reason is the one worth showing, so prefer it.
+        const nested = raw.quote ?? raw;
+        const reason = nested.routes?.find((r) => !r.viable && r.reason)?.reason ?? raw.error;
+        setError(explainQuoteRejection(reason, sourceChain.name));
+        setQuote(nested.routes ? formatQuote(nested) : null);
         setState("idle");
         return;
       }
@@ -164,11 +214,33 @@ export function usePaymentWidget() {
   const switchToSource = useCallback(async () => {
     if (!sourceChain) return;
     setSwitchTargetName(sourceChain.name);
+    setError(null);
+    setIsSwitchingSource(true);
+
+    // Arc and Hedera are not in most wallets' default chain lists, so a
+    // switch there also means the wallet has to add an unfamiliar network
+    // first (wallet_addEthereumChain). Some connectors never settle that
+    // promise if the user dismisses the add-network popup without an
+    // explicit reject, which otherwise leaves this button stuck on
+    // "Switching" forever with wagmi's own isPending never flipping back.
+    // isSwitchingSource is ours to clear no matter what the connector does,
+    // and the timeout guarantees that happens even if switchChainAsync
+    // itself never settles.
+    const SWITCH_TIMEOUT_MS = 20_000;
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("timed out")), SWITCH_TIMEOUT_MS);
+    });
+
     try {
-      await switchChainAsync({ chainId: sourceChain.chainId });
+      await Promise.race([switchChainAsync({ chainId: sourceChain.chainId }), timeout]);
       setState("ready_to_sign");
-    } catch {
-      setError(`Switch to ${sourceChain.name} was rejected`);
+    } catch (err) {
+      const detail = err instanceof Error && err.message !== "timed out" ? `: ${err.message}` : "";
+      setError(
+        `Could not switch to ${sourceChain.name}${detail}. If your wallet does not already have this network, add it manually and try again.`,
+      );
+    } finally {
+      setIsSwitchingSource(false);
     }
   }, [sourceChain, switchChainAsync]);
 
@@ -183,6 +255,17 @@ export function usePaymentWidget() {
       return;
     }
     if (!sourceChain || !destChain || !recipient || !selectedRoute || !amount) return;
+
+    // Belt and braces alongside the useEffect above: a click can land in the
+    // same render pass as a wallet-side network change, before that effect
+    // has a chance to move the state machine to wrong_network. Signing
+    // against a stale sourceChain here is exactly what produces viem's
+    // "Provided chainId ... must match the active chainId ..." error, so
+    // check the live wallet chain synchronously rather than trusting state.
+    if (wrongNetwork) {
+      setState("wrong_network");
+      return;
+    }
 
     // Hedera's USDC does not implement EIP-3009 (confirmed on-chain — see
     // docs/CHAINS.md "Hedera"), so there is no off-chain permit to sign here.
@@ -285,7 +368,18 @@ export function usePaymentWidget() {
       setError(err instanceof Error ? err.message : "Signing was rejected");
       setState("ready_to_sign");
     }
-  }, [sourceChain, destChain, recipient, payer, selectedRoute, amount, signTypedDataAsync, usingPrivy, privy.signer]);
+  }, [
+    sourceChain,
+    destChain,
+    recipient,
+    payer,
+    selectedRoute,
+    amount,
+    signTypedDataAsync,
+    usingPrivy,
+    privy.signer,
+    wrongNetwork,
+  ]);
 
   const reset = useCallback(() => {
     setState("idle");

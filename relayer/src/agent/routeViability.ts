@@ -30,6 +30,10 @@ export interface ChainState {
   destPoolBalance: bigint;
   sourceChainGasPriceWei: bigint;
   destChainGasPriceWei: bigint;
+  /** Payer's USDC balance on the SOURCE chain. Undefined means the caller
+   *  could not read it (an RPC failure), which is not the same as zero and
+   *  must not reject the payment on its own. */
+  payerBalance?: bigint;
 }
 
 function emptyDecision(overrides: Partial<RouteDecision> & { reason: string }): RouteDecision {
@@ -81,10 +85,20 @@ export function evaluateRouteViability(request: PaymentRequest, chainState: Chai
   const rejection = checkRequestRejection(request);
   if (rejection) return rejection;
 
-  const { destPoolPaused, feeBpsRaw, destPoolBalance, sourceChainGasPriceWei, destChainGasPriceWei } = chainState;
+  const { destPoolPaused, feeBpsRaw, destPoolBalance, sourceChainGasPriceWei, destChainGasPriceWei, payerBalance } =
+    chainState;
 
   if (destPoolPaused) {
     return emptyDecision({ reason: "PoolPaused", destPoolPaused: true });
+  }
+
+  // Reject before quoting rather than letting the payer sign a permit that
+  // can only fail: transferWithAuthorization reverts on an insufficient
+  // balance, and because the relayer submits that permit itself, the payer
+  // sees a "successful" relayer transaction that moved nothing. Undefined
+  // (an RPC read failure) is deliberately not treated as zero.
+  if (payerBalance !== undefined && payerBalance < request.amount) {
+    return emptyDecision({ reason: "InsufficientPayerBalance" });
   }
 
   const feeBps = Number(feeBpsRaw);

@@ -79,6 +79,17 @@ async function buildFastPoolCandidate(request: PaymentRequest) {
   ]);
   const destPoolBalance = (await destUsdcContract.read.balanceOf([destPoolAddress])) as bigint;
 
+  // The payer's balance on the SOURCE chain. Left undefined if the read
+  // fails so an RPC blip degrades to the previous behavior rather than
+  // rejecting every payment as underfunded.
+  let payerBalance: bigint | undefined;
+  try {
+    const sourceUsdcContract = await getUsdcContract(request.fromChainId);
+    payerBalance = (await sourceUsdcContract.read.balanceOf([request.payer])) as bigint;
+  } catch (error) {
+    console.error(`[router] could not read payer balance on chain ${request.fromChainId}:`, error);
+  }
+
   const [sourceChainGasPriceWei, destChainGasPriceWei] = await Promise.all([
     getGasPriceForChain(request.fromChainId),
     getGasPriceForChain(request.toChainId),
@@ -90,6 +101,7 @@ async function buildFastPoolCandidate(request: PaymentRequest) {
     destPoolBalance,
     sourceChainGasPriceWei,
     destChainGasPriceWei,
+    payerBalance,
   };
 
   const decision = evaluateRouteViability(request, chainState);

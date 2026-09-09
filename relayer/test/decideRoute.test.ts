@@ -131,6 +131,31 @@ describe("evaluateRouteViability", () => {
     expect(decision.estimatedSeconds).toBe(0);
   });
 
+  it("rejects when the payer holds less USDC than the amount being sent", () => {
+    const decision = evaluateRouteViability(VALID_REQUEST, {
+      ...VIABLE_CHAIN_STATE,
+      payerBalance: VALID_REQUEST.amount - 1n,
+    });
+    expect(decision.viable).toBe(false);
+    expect(decision.reason).toBe("InsufficientPayerBalance");
+  });
+
+  it("accepts when the payer's balance exactly covers the amount", () => {
+    const decision = evaluateRouteViability(VALID_REQUEST, {
+      ...VIABLE_CHAIN_STATE,
+      payerBalance: VALID_REQUEST.amount,
+    });
+    expect(decision.viable).toBe(true);
+  });
+
+  it("does not reject on an unreadable payer balance, since undefined is not zero", () => {
+    const decision = evaluateRouteViability(VALID_REQUEST, {
+      ...VIABLE_CHAIN_STATE,
+      payerBalance: undefined,
+    });
+    expect(decision.viable).toBe(true);
+  });
+
   it("returns a viable decision when the pool is unpaused and sufficiently funded", () => {
     const decision = evaluateRouteViability(VALID_REQUEST, VIABLE_CHAIN_STATE);
     expect(decision.viable).toBe(true);
