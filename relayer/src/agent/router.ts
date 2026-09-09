@@ -47,8 +47,24 @@ export interface RouteQuote {
   recommended: ScoredRoute | null;
 }
 
-async function buildFastPoolCandidate(request: PaymentRequest) {
-  const rejection = checkRequestRejection(request);
+/**
+ * Payer's USDC balance on the SOURCE chain, or undefined if it could not be
+ * read. Undefined is deliberately distinct from zero: an RPC failure must
+ * degrade to "unknown, do not block" rather than rejecting every payment as
+ * underfunded.
+ */
+async function readPayerBalance(request: PaymentRequest): Promise<bigint | undefined> {
+  try {
+    const sourceUsdcContract = await getUsdcContract(request.fromChainId);
+    return (await sourceUsdcContract.read.balanceOf([request.payer])) as bigint;
+  } catch (error) {
+    console.error(`[router] could not read payer balance on chain ${request.fromChainId}:`, error);
+    return undefined;
+  }
+}
+
+async function buildFastPoolCandidate(request: PaymentRequest, payerBalance?: bigint) {
+  const rejection = checkRequestRejection(request, payerBalance);
   if (rejection) {
     return {
       candidate: {
@@ -79,17 +95,6 @@ async function buildFastPoolCandidate(request: PaymentRequest) {
   ]);
   const destPoolBalance = (await destUsdcContract.read.balanceOf([destPoolAddress])) as bigint;
 
-  // The payer's balance on the SOURCE chain. Left undefined if the read
-  // fails so an RPC blip degrades to the previous behavior rather than
-  // rejecting every payment as underfunded.
-  let payerBalance: bigint | undefined;
-  try {
-    const sourceUsdcContract = await getUsdcContract(request.fromChainId);
-    payerBalance = (await sourceUsdcContract.read.balanceOf([request.payer])) as bigint;
-  } catch (error) {
-    console.error(`[router] could not read payer balance on chain ${request.fromChainId}:`, error);
-  }
-
   const [sourceChainGasPriceWei, destChainGasPriceWei] = await Promise.all([
     getGasPriceForChain(request.fromChainId),
     getGasPriceForChain(request.toChainId),
@@ -119,8 +124,8 @@ async function buildFastPoolCandidate(request: PaymentRequest) {
   };
 }
 
-async function buildCctpCandidate(request: PaymentRequest) {
-  const rejection = checkRequestRejection(request);
+async function buildCctpCandidate(request: PaymentRequest, payerBalance?: bigint) {
+  const rejection = checkRequestRejection(request, payerBalance);
   if (rejection) {
     return { route: "cctp" as const, viable: false, reason: rejection.reason, feeBps: 0, feeAmount: 0n, payoutAmount: 0n };
   }
@@ -166,9 +171,14 @@ async function buildCctpCandidate(request: PaymentRequest) {
 }
 
 export async function quoteRoutes(request: RouteQuoteRequest): Promise<RouteQuote> {
+  // Read once and share: both routes settle from the same source-chain
+  // balance, so an underfunded payer must fail both. Checking it inside only
+  // one builder is how CCTP kept quoting viable for a wallet holding nothing.
+  const payerBalance = await readPayerBalance(request);
+
   const [{ candidate: fastPool }, cctp] = await Promise.all([
-    buildFastPoolCandidate(request),
-    buildCctpCandidate(request),
+    buildFastPoolCandidate(request, payerBalance),
+    buildCctpCandidate(request, payerBalance),
   ]);
 
   const routes = scoreRoutes({
@@ -184,7 +194,11 @@ export async function quoteRoutes(request: RouteQuoteRequest): Promise<RouteQuot
 }
 
 export async function decideRoute(request: RouteQuoteRequest): Promise<RouteDecision> {
-  const rejection = checkRequestRejection(request);
+  // This is the path that authorizes a real payment, so it needs the same
+  // balance gate quoteRoutes has, not just the chain/amount checks.
+  const payerBalance = await readPayerBalance(request);
+
+  const rejection = checkRequestRejection(request, payerBalance);
   if (rejection) {
     return {
       viable: false,
@@ -202,8 +216,8 @@ export async function decideRoute(request: RouteQuoteRequest): Promise<RouteDeci
   }
 
   const [{ candidate: fastPool, chainState }, cctp] = await Promise.all([
-    buildFastPoolCandidate(request),
-    buildCctpCandidate(request),
+    buildFastPoolCandidate(request, payerBalance),
+    buildCctpCandidate(request, payerBalance),
   ]);
 
   const [top] = scoreRoutes({ amount: request.amount, preference: request.preference, fastPool, cctp });

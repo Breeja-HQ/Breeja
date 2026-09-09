@@ -57,7 +57,18 @@ export function computeFee(amount: bigint, feeBps: bigint): { feeAmount: bigint;
   return { feeAmount, payoutAmount };
 }
 
-export function checkRequestRejection(request: PaymentRequest): RouteDecision | null {
+/**
+ * Route-independent rejections. `payerBalance` is checked here rather than in
+ * a single route's builder so every route inherits the same gate: an
+ * underfunded payer cannot settle over the fast pool OR over CCTP, and
+ * checking it per-route is how one of them silently kept quoting viable.
+ * Undefined means the balance could not be read, which is not the same as
+ * zero and must not reject on its own.
+ */
+export function checkRequestRejection(
+  request: PaymentRequest,
+  payerBalance?: bigint,
+): RouteDecision | null {
   if (!isSupportedSourceChain(request.fromChainId)) {
     return emptyDecision({ reason: "UnsupportedSourceChain" });
   }
@@ -78,27 +89,26 @@ export function checkRequestRejection(request: PaymentRequest): RouteDecision | 
     return emptyDecision({ reason: "ZeroRecipient" });
   }
 
+  // Reject before quoting rather than letting the payer sign something that
+  // can only fail. transferWithAuthorization reverts on an insufficient
+  // balance, and because the relayer submits that permit itself, the payer
+  // sees a "successful" relayer transaction that moved nothing.
+  if (payerBalance !== undefined && payerBalance < request.amount) {
+    return emptyDecision({ reason: "InsufficientPayerBalance" });
+  }
+
   return null;
 }
 
 export function evaluateRouteViability(request: PaymentRequest, chainState: ChainState): RouteDecision {
-  const rejection = checkRequestRejection(request);
-  if (rejection) return rejection;
-
   const { destPoolPaused, feeBpsRaw, destPoolBalance, sourceChainGasPriceWei, destChainGasPriceWei, payerBalance } =
     chainState;
 
+  const rejection = checkRequestRejection(request, payerBalance);
+  if (rejection) return rejection;
+
   if (destPoolPaused) {
     return emptyDecision({ reason: "PoolPaused", destPoolPaused: true });
-  }
-
-  // Reject before quoting rather than letting the payer sign a permit that
-  // can only fail: transferWithAuthorization reverts on an insufficient
-  // balance, and because the relayer submits that permit itself, the payer
-  // sees a "successful" relayer transaction that moved nothing. Undefined
-  // (an RPC read failure) is deliberately not treated as zero.
-  if (payerBalance !== undefined && payerBalance < request.amount) {
-    return emptyDecision({ reason: "InsufficientPayerBalance" });
   }
 
   const feeBps = Number(feeBpsRaw);

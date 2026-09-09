@@ -156,6 +156,24 @@ describe("evaluateRouteViability", () => {
     expect(decision.viable).toBe(true);
   });
 
+  // The balance gate lives in checkRequestRejection precisely so it is not
+  // per-route. It was originally only in the fast-pool path, which let CCTP
+  // keep quoting viable for a wallet holding nothing; these pin the shared
+  // gate directly so a future route cannot silently skip it.
+  it("rejects an underfunded payer at the shared gate, independent of route", () => {
+    const rejection = checkRequestRejection(VALID_REQUEST, VALID_REQUEST.amount - 1n);
+    expect(rejection).not.toBeNull();
+    expect(rejection?.reason).toBe("InsufficientPayerBalance");
+  });
+
+  it("passes the shared gate when the balance covers the amount", () => {
+    expect(checkRequestRejection(VALID_REQUEST, VALID_REQUEST.amount)).toBeNull();
+  });
+
+  it("passes the shared gate when the balance is unknown", () => {
+    expect(checkRequestRejection(VALID_REQUEST, undefined)).toBeNull();
+  });
+
   it("returns a viable decision when the pool is unpaused and sufficiently funded", () => {
     const decision = evaluateRouteViability(VALID_REQUEST, VIABLE_CHAIN_STATE);
     expect(decision.viable).toBe(true);
