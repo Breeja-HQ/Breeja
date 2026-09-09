@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { ArrowLeft, Loader2, Mail, PenLine, Receipt, RotateCcw, ShieldCheck, Zap } from "lucide-react";
 import { usePaymentWidget } from "@/lib/hooks/usePaymentWidget";
 import Nav from "@/app/components/Nav";
@@ -12,6 +13,18 @@ import PaymentTracker from "@/app/components/pay/PaymentTracker";
 
 export default function PayPage() {
   const widget = usePaymentWidget();
+  const { openConnectModal } = useConnectModal();
+
+  function connectWallet() {
+    // Privy is offered inline above the form (email sign-in, no extension
+    // needed); RainbowKit's modal covers everyone else. If neither client is
+    // ready yet (still hydrating), fail quietly rather than throwing.
+    if (widget.privyReady && !widget.privyAuthenticated && !widget.connectedAddress) {
+      widget.loginWithPrivy();
+      return;
+    }
+    openConnectModal?.();
+  }
 
   return (
     <>
@@ -116,6 +129,8 @@ export default function PayPage() {
                   recipient={widget.recipient}
                   route={widget.selectedRoute}
                   onSign={widget.submitPayment}
+                  isWalletConnected={Boolean(widget.connectedAddress)}
+                  onConnectWallet={connectWallet}
                 />
               )}
             </div>

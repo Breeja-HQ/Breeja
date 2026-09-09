@@ -173,7 +173,16 @@ export function usePaymentWidget() {
   }, [sourceChain, switchChainAsync]);
 
   const submitPayment = useCallback(async () => {
-    if (!sourceChain || !destChain || !recipient || !payer || !selectedRoute || !amount) return;
+    if (!payer) {
+      // Reachable if this is ever invoked from somewhere other than
+      // ReadyToSign's connect-gated button (e.g. a future keyboard shortcut).
+      // The UI's normal path swaps to a "Connect wallet" button instead of
+      // calling this, so surface a real error here rather than a silent
+      // no-op if that guard is ever bypassed.
+      setError("Connect a wallet before signing this payment.");
+      return;
+    }
+    if (!sourceChain || !destChain || !recipient || !selectedRoute || !amount) return;
 
     // Hedera's USDC does not implement EIP-3009 (confirmed on-chain — see
     // docs/CHAINS.md "Hedera"), so there is no off-chain permit to sign here.

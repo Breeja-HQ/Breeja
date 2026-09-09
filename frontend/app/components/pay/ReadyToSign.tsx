@@ -1,7 +1,7 @@
 "use client";
 
 import { isAddress } from "viem";
-import { ArrowRight, PenLine, ShieldCheck } from "lucide-react";
+import { ArrowRight, PenLine, ShieldCheck, Wallet } from "lucide-react";
 import type { QuoteRoute } from "@/lib/hooks/usePaymentWidget";
 import type { ChainConfig } from "@/lib/chains";
 import { useEnsName } from "@/lib/hooks/useEnsName";
@@ -13,6 +13,8 @@ interface Props {
   recipient: string;
   route: QuoteRoute;
   onSign: () => void;
+  isWalletConnected: boolean;
+  onConnectWallet: () => void;
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -24,7 +26,16 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-export default function ReadyToSign({ sourceChain, destChain, amount, recipient, route, onSign }: Props) {
+export default function ReadyToSign({
+  sourceChain,
+  destChain,
+  amount,
+  recipient,
+  route,
+  onSign,
+  isWalletConnected,
+  onConnectWallet,
+}: Props) {
   const recipientAddress = isAddress(recipient) ? recipient : null;
   const recipientEnsName = useEnsName(recipientAddress);
 
@@ -57,22 +68,45 @@ export default function ReadyToSign({ sourceChain, destChain, amount, recipient,
         </Row>
       </div>
 
-      <button
-        type="button"
-        onClick={onSign}
-        className="motion-lift flex w-full items-center justify-center gap-2.5 rounded-full bg-accent px-6 py-4 text-xl font-semibold text-white outline-none hover:shadow-lg focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
-      >
-        <PenLine className="h-5 w-5" aria-hidden="true" />
-        Sign and pay
-      </button>
+      {isWalletConnected ? (
+        <>
+          <button
+            type="button"
+            onClick={onSign}
+            className="motion-lift flex w-full items-center justify-center gap-2.5 rounded-full bg-accent px-6 py-4 text-xl font-semibold text-white outline-none hover:shadow-lg focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+          >
+            <PenLine className="h-5 w-5" aria-hidden="true" />
+            Sign and pay
+          </button>
 
-      <p className="flex items-start justify-center gap-2 text-base leading-relaxed text-body">
-        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
-        <span>
-          Signing is free and off-chain. It moves no funds by itself. The relayer pays all gas and submits
-          on your behalf.
-        </span>
-      </p>
+          <p className="flex items-start justify-center gap-2 text-base leading-relaxed text-body">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
+            <span>
+              Signing is free and off-chain. It moves no funds by itself. The relayer pays all gas and submits
+              on your behalf.
+            </span>
+          </p>
+        </>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={onConnectWallet}
+            className="motion-lift flex w-full items-center justify-center gap-2.5 rounded-full bg-ink px-6 py-4 text-xl font-semibold text-white outline-none hover:shadow-lg focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+          >
+            <Wallet className="h-5 w-5" aria-hidden="true" />
+            Connect wallet to sign and pay
+          </button>
+
+          <p className="flex items-start justify-center gap-2 text-base leading-relaxed text-body">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
+            <span>
+              No wallet is connected yet. Connect one, or sign in with email above, before signing this
+              payment.
+            </span>
+          </p>
+        </>
+      )}
     </div>
   );
 }
